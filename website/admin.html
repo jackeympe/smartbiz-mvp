@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartBiz Admin | Jobs & Leads</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: rgba(255,255,255,0.08);
+      --accent: #f97316;
+      --accent-2: #fb923c;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warn: #eab308;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 18px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #b91c1c); display: grid; place-items: center; font-weight: 800; letter-spacing: 0.5px; }
+    .title { font-size: 20px; font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 12px; }
+    .pill { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .card { padding: 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    th { color: var(--muted); font-weight: 500; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.08); border: 1px solid var(--border); }
+    .btn { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.08); color: var(--text); cursor: pointer; }
+    .btn:hover { background: rgba(255,255,255,0.14); }
+    .msg { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 16px; }
+    .ok { color: var(--success); }
+    .err { color: var(--danger); }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo">SB</div>
+        <div>
+          <div class="title">SmartBiz Admin</div>
+          <div class="subtitle">Local-first dashboard for jobs, leads, and documents.</div>
+        </div>
+      </div>
+      <div class="pill">Offline ready</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Jobs</h2>
+        <div class="row">
+          <button class="btn" onclick="loadJobs()">Refresh</button>
+        </div>
+        <div id="jobs-msg" class="msg"></div>
+        <div style="max-height: 420px; overflow: auto;">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Client</th><th>Site</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="jobs-table"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Leads</h2>
+        <div class="row">
+          <button class="btn" onclick="loadLeads()">Refresh</button>
+        </div>
+        <div id="leads-msg" class="msg"></div>
+        <div style="max-height: 420px; overflow: auto;">
+          <table>
+            <thead>
+              <tr><th>ID</th><th>Name</th><th>Email</th><th>Interest</th><th>Created</th></tr>
+            </thead>
+            <tbody id="leads-table"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) || 'http://localhost:8000';
+
+    function setMsg(id, text, kind='') {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg ' + kind;
+    }
+
+    async function loadJobs() {
+      setMsg('jobs-msg', 'Loading...');
+      try {
+        const r = await fetch(API_BASE + '/jobs');
+        const data = await r.json();
+        const tbody = document.getElementById('jobs-table');
+        tbody.innerHTML = '';
+        (data.jobs || []).forEach(job => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${job.id}</td><td>${job.client}</td><td>${job.site}</td><td><span class="badge">${job.status}</span></td>` +
+            `<td><button class="btn" data-action="approve" data-id="${job.id}">Approve</button> <button class="btn" data-action="reject" data-id="${job.id}">Reject</button> <button class="btn" data-action="doc" data-id="${job.id}">Doc</button></td>`;
+          tbody.appendChild(tr);
+        });
+        setMsg('jobs-msg', data.jobs?.length ? `Loaded ${data.jobs.length} jobs` : 'No jobs yet.');
+      } catch (e) {
+        setMsg('jobs-msg', 'Failed to load jobs.', 'err');
+      }
+    }
+
+    async function loadLeads() {
+      setMsg('leads-msg', 'Loading...');
+      try {
+        const r = await fetch(API_BASE + '/leads');
+        const data = await r.json();
+        const tbody = document.getElementById('leads-table');
+        tbody.innerHTML = '';
+        (data.leads || []).forEach(lead => {
+          const tr = document.createElement('tr');
+          const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ');
+          tr.innerHTML = `<td>${lead.id}</td><td>${name}</td><td>${lead.email}</td><td><span class="badge">${lead.interest}</span></td><td>${lead.created_at || ''}</td>`;
+          tbody.appendChild(tr);
+        });
+        setMsg('leads-msg', data.leads?.length ? `Loaded ${data.leads.length} leads` : 'No leads yet.');
+      } catch (e) {
+        setMsg('leads-msg', 'Failed to load leads.', 'err');
+      }
+    }
+
+    async function act(e) {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === 'approve' || action === 'reject') {
+        const path = action === 'approve' ? '/approve' : '/reject';
+        const r = await fetch(API_BASE + '/jobs/' + id + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: action }) });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('jobs-msg', `Job ${id} ${data.status}.`, 'ok');
+          loadJobs();
+        } else {
+          setMsg('jobs-msg', data.detail || 'Action failed.', 'err');
+        }
+      } else if (action === 'doc') {
+        const r = await fetch(API_BASE + '/api/v1/documents/' + id);
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('jobs-msg', 'Document stub: ' + data.type + '.', 'ok');
+          console.log('document', data);
+        } else {
+          setMsg('jobs-msg', data.detail || 'Document failed.', 'err');
+        }
+      }
+    }
+
+    document.getElementById('jobs-table').addEventListener('click', act);
+    loadJobs();
+    loadLeads();
+  </script>
+</body>
+</html>

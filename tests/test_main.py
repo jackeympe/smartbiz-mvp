@@ -24,6 +24,28 @@ def test_job_requires_fields():
     r = client.post("/jobs", json={})
     assert r.status_code == 400
 
+def test_approve_reject_job():
+    r = client.post("/jobs", json={"client": "Test", "site": "Site"})
+    assert r.status_code == 200
+    job_id = r.json()["job_id"]
+
+    approve = client.post(f"/jobs/{job_id}/approve", json={"note": "looks good"})
+    assert approve.status_code == 200
+    assert approve.json()["status"] == "approved"
+
+    reject = client.post(f"/jobs/{job_id}/reject", json={"note": "redo"})
+    assert reject.status_code == 200
+    assert reject.json()["status"] == "rejected"
+
+def test_document_stub():
+    r = client.post("/jobs", json={"client": "Doc", "site": "Site"})
+    job_id = r.json()["job_id"]
+    doc = client.get(f"/api/v1/documents/{job_id}")
+    assert doc.status_code == 200
+    body = doc.json()
+    assert body["type"] == "job_summary"
+    assert "disclaimer" in body
+
 def test_create_lead_persists_and_lists():
     payload = {
         "first_name": "Jack",
