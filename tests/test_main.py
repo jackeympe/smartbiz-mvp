@@ -46,6 +46,13 @@ def test_document_stub():
     assert body["type"] == "job_summary"
     assert "disclaimer" in body
 
+def test_app_status():
+    r = client.get("/api/v1/status", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert "counts" in body
+
 def test_create_lead_persists_and_lists():
     payload = {
         "first_name": "Jack",

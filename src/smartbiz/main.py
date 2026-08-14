@@ -179,6 +179,18 @@ async def generate_document(request: Request) -> JSONResponse:
     }
     return JSONResponse(doc)
 
+async def app_status(request: Request) -> JSONResponse:
+    with lock, sqlite3.connect(DB_PATH) as con:
+        jobs = con.execute("SELECT COUNT(*) AS count FROM jobs").fetchone()[0]
+        leads = con.execute("SELECT COUNT(*) AS count FROM leads").fetchone()[0]
+        approvals = con.execute("SELECT COUNT(*) AS count FROM approvals").fetchone()[0]
+    return JSONResponse({
+        "service": "SmartBiz MVP",
+        "status": "ok",
+        "counts": {"jobs": jobs, "leads": leads, "approvals": approvals},
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
 app = Starlette(
     routes=[
         Route("/", homepage),
@@ -191,6 +203,7 @@ app = Starlette(
         Route("/leads", list_leads, methods=["GET"]),
         Route("/api/v1/leads", create_lead, methods=["POST"]),
         Route("/api/v1/documents/{job_id}", generate_document, methods=["GET"]),
+        Route("/api/v1/status", app_status, methods=["GET"]),
     ],
     middleware=[Middleware(SimpleTokenMiddleware)],
 )
