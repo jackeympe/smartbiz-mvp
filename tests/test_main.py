@@ -122,3 +122,68 @@ def test_export_quiz_csv():
     data = r.json()
     assert "csv" in data
     assert "first_name,last_name,email" in data["csv"]
+
+def test_create_booking():
+    payload = {
+        "first_name": "Client",
+        "last_name": "One",
+        "email": "client@example.com",
+        "phone": "0710000000",
+        "company": "Acme",
+        "service": "site-inspection",
+        "amount_cents": 5000,
+        "currency": "ZAR",
+    }
+    r = client.post("/api/v1/bookings", json=payload, headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ok"] is True
+    assert "booking_id" in body
+    assert isinstance(body["payfast_url"], str)
+
+def test_booking_list_and_analytics():
+    r = client.get("/api/v1/bookings", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    assert "bookings" in r.json()
+
+    r2 = client.get("/api/v1/analytics/summary", headers={"x-smartbiz-token": "dev"})
+    assert r2.status_code == 200
+    body = r2.json()
+    assert "bookings" in body
+    assert "refunds" in body
+
+def test_technician_qr_and_complete():
+    payload = {
+        "first_name": "Tech",
+        "last_name": "Client",
+        "email": "tech@example.com",
+        "service": "site-inspection",
+        "amount_cents": 1000,
+    }
+    r = client.post("/api/v1/bookings", json=payload, headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+
+    qr = client.get(f"/bookings/{booking_id}/qr", headers={"x-smartbiz-token": "dev"})
+    assert qr.status_code == 200
+    body = qr.json()
+    assert body["booking_id"] == booking_id
+    assert body["qr_png_base64"]
+
+    complete = client.post(f"/technician/complete/{booking_id}?token=tech-complete-1234", json={"visited": True, "completed": True}, headers={"x-smartbiz-token": "dev"})
+    assert complete.status_code == 200
+    assert complete.json()["status"] == "technician_completed"
+
+def test_refund_window_enforced():
+    payload = {
+        "first_name": "Refund",
+        "last_name": "Client",
+        "email": "refund@example.com",
+        "service": "site-inspection",
+        "amount_cents": 2000,
+    }
+    r = client.post("/api/v1/bookings", json=payload, headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+
+    refund = client.post(f"/bookings/{booking_id}/refund", json={"reason": "no-show"}, headers={"x-smartbiz-token": "dev"})
+    assert refund.status_code == 403
+    assert "refund window" in refund.json()["detail"]

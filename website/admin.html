@@ -19,17 +19,17 @@
     }
     * { box-sizing: border-box; }
     body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
-    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 18px; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 18px; }
     header { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
     .brand { display: flex; align-items: center; gap: 12px; }
     .logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #b91c1c); display: grid; place-items: center; font-weight: 800; letter-spacing: 0.5px; }
     .title { font-size: 20px; font-weight: 700; }
     .subtitle { color: var(--muted); font-size: 12px; }
     .pill { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
     .card { padding: 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
     .card h2 { margin: 0 0 12px; font-size: 16px; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
     th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 13px; }
     th { color: var(--muted); font-weight: 500; }
@@ -40,12 +40,8 @@
     .ok { color: var(--success); }
     .err { color: var(--danger); }
     .hidden { display: none; }
-    .full { grid-column: 1 / -1; }
-    .lead { padding: 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
-    .muted { color: var(--muted); }
-    input[type="password"], input[type="text"], input[type="email"] { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,36,0.6); color: var(--text); width: 100%; }
-    input:focus { outline: none; border-color: var(--accent-2); }
-    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+    .full { width: 100%; }
+    @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -68,11 +64,14 @@
           <div class="logo">SB</div>
           <div>
             <div class="title">SmartBiz Admin</div>
-            <div class="subtitle">Local-first dashboard for jobs, leads, and documents.</div>
+            <div class="subtitle">Jobs, leads, bookings, and technician completion.</div>
           </div>
         </div>
         <div class="row">
-          <div class="pill">Offline ready</div>
+          <div class="pill" id="admin-token-pill">Offline ready</div>
+          <button class="btn" onclick="exportLeads()">Export Leads</button>
+          <button class="btn" onclick="exportQuiz()">Export Quiz</button>
+          <button class="btn" onclick="loadAnalytics()">Analytics</button>
           <button class="btn" id="admin-logout">Logout</button>
         </div>
       </header>
@@ -82,8 +81,6 @@
           <h2>Jobs</h2>
           <div class="row">
             <button class="btn" onclick="loadJobs()">Refresh</button>
-            <button class="btn" id="export-leads" onclick="exportLeads()">Export Leads</button>
-            <button class="btn" id="export-quiz" onclick="exportQuiz()">Export Quiz</button>
           </div>
           <div id="jobs-msg" class="msg"></div>
           <div style="max-height: 420px; overflow: auto;">
@@ -110,6 +107,24 @@
               <tbody id="leads-table"></tbody>
             </table>
           </div>
+        </section>
+
+        <section class="card">
+          <h2>Bookings & Payments</h2>
+          <div class="row">
+            <button class="btn" onclick="loadBookings()">Refresh</button>
+            <button class="btn" onclick="loadAnalytics()">Analytics</button>
+          </div>
+          <div id="bookings-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Client</th><th>Service</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="bookings-table"></tbody>
+            </table>
+          </div>
+          <div id="analytics-msg" class="msg" style="margin-top:12px;"></div>
         </section>
       </div>
     </section>
@@ -145,6 +160,7 @@
       if (show) {
         loadJobs();
         loadLeads();
+        loadBookings();
       }
     }
 
@@ -203,6 +219,43 @@
       }
     }
 
+    async function loadBookings() {
+      setMsg('bookings-msg', 'Loading...');
+      try {
+        const r = await request('/api/v1/bookings');
+        const data = await r.json();
+        const tbody = document.getElementById('bookings-table');
+        tbody.innerHTML = '';
+        (data.bookings || []).forEach(b => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${b.id}</td><td>${b.first_name} ${b.last_name}</td><td>${b.service}</td><td>${(b.amount_cents||0)/100} ${b.currency}</td><td><span class="badge">${b.status}</span></td>` +
+            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button></td>`;
+          tbody.appendChild(tr);
+        });
+        setMsg('bookings-msg', data.bookings?.length ? `Loaded ${data.bookings.length} bookings` : 'No bookings yet.');
+      } catch (e) {
+        setMsg('bookings-msg', 'Failed to load bookings.', 'err');
+      }
+    }
+
+    async function loadAnalytics() {
+      const msg = document.getElementById('analytics-msg');
+      try {
+        const r = await request('/api/v1/analytics/summary');
+        const data = await r.json();
+        if (r.ok) {
+          msg.textContent = `Leads: ${data.leads} | Bookings: ${data.bookings} | Payments: ${data.payments_confirmed} | Completed: ${data.technician_completed} | Refunds: ${data.refunds}`;
+          msg.className = 'msg ok';
+        } else {
+          msg.textContent = data.detail || 'Analytics failed.';
+          msg.className = 'msg err';
+        }
+      } catch (e) {
+        msg.textContent = 'Analytics failed.';
+        msg.className = 'msg err';
+      }
+    }
+
     async function act(e) {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
@@ -227,11 +280,29 @@
         } else {
           setMsg('jobs-msg', data.detail || 'Document failed.', 'err');
         }
+      } else if (action === 'qr') {
+        const r = await request('/bookings/' + id + '/qr');
+        const data = await r.json();
+        if (r.ok && data.qr_png_base64) {
+          const win = window.open('', '_blank');
+          win.document.write(`<img src="data:image/png;base64,${data.qr_png_base64}" style="max-width:100%;background:#fff;padding:24px;"/>`);
+        } else {
+          setMsg('bookings-msg', data.detail || 'QR failed.', 'err');
+        }
+      } else if (action === 'refund') {
+        const r = await request('/bookings/' + id + '/refund', { method: 'POST', body: JSON.stringify({ reason: 'admin-initiated' }) });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('bookings-msg', 'Booking ' + id + ' refunded.', 'ok');
+          loadBookings();
+        } else {
+          setMsg('bookings-msg', data.detail || 'Refund failed.', 'err');
+        }
       }
     }
 
     document.getElementById('jobs-table').addEventListener('click', act);
-    document.getElementById('leads-table').addEventListener('click', act);
+    document.getElementById('bookings-table').addEventListener('click', act);
 
     if (ADMIN_TOKEN) {
       showAdmin(true);

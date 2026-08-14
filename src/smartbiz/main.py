@@ -6,13 +6,20 @@ from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.requests import Request
+from starlette.background import BackgroundTask
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import hmac
+import hashlib
+import os
+import smtplib
+from email.mime.text import MIMEText
+import json
 
 DB_PATH = "smartbiz.sqlite"
 lock = threading.Lock()
-ADMIN_TOKEN = "dev"
+ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")
 
 QUIZ_QUESTIONS = [
   {"id": "q1", "text": "Do you have a current fire risk assessment on file?", "options": ["Yes", "No", "Not sure"]},
@@ -87,6 +94,48 @@ def init_db() -> None:
             )
             """
         )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bookings (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              first_name TEXT NOT NULL,
+              last_name TEXT NOT NULL,
+              email TEXT NOT NULL,
+              phone TEXT NOT NULL DEFAULT '',
+              company TEXT NOT NULL DEFAULT '',
+              service TEXT NOT NULL DEFAULT 'site-inspection',
+              status TEXT NOT NULL DEFAULT 'pending',
+              amount_cents INTEGER NOT NULL DEFAULT 0,
+              currency TEXT NOT NULL DEFAULT 'ZAR',
+              payfast_payment_id TEXT NOT NULL DEFAULT '',
+              payfast_pf_payment_id TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS technicians (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              email TEXT NOT NULL,
+              pin TEXT NOT NULL DEFAULT '0000',
+              active INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS job_events (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              job_id INTEGER NOT NULL,
+              event_type TEXT NOT NULL,
+              detail TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
         con.commit()
 
 init_db()
@@ -96,6 +145,37 @@ def homepage(request: Any) -> JSONResponse:
 
 def health(request: Any) -> JSONResponse:
     return JSONResponse({"status": "ok"})
+
+def _json_error(detail: str, status_code: int = 400):
+    return JSONResponse({"detail": detail}, status_code=status_code)
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+def _send_email(subject: str, body: str, to_addr: str | None = None) -> None:
+    host = os.environ.get("SMTP_HOST")
+    port = int(os.environ.get("SMTP_PORT", "0") or "0")
+    user = os.environ.get("SMTP_USER")
+    password = os.environ.get("SMTP_PASS")
+    to_addr = to_addr or os.environ.get("SMARTBIZ_EMAIL_TO") or user
+    if not all([host, port, user, password, to_addr]):
+        raise RuntimeError("SMTP is not configured")
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = user
+    msg["To"] = to_addr
+    with smtplib.SMTP(host, port, timeout=20) as s:
+        s.starttls()
+        s.login(user, password)
+        s.send_message(msg)
+
+def _record_job_event(job_id: int, event_type: str, detail: str = "") -> None:
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute(
+            "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, ?, ?, ?)",
+            (job_id, event_type, detail, _now_iso()),
+        )
+        con.commit()
 
 async def list_jobs(request: Any) -> JSONResponse:
     with lock, sqlite3.connect(DB_PATH) as con:
@@ -110,7 +190,7 @@ async def get_job(request: Request) -> JSONResponse:
         con.row_factory = sqlite3.Row
         row = con.execute("SELECT id, client, site, status, created_at FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
-            return JSONResponse({"detail": "job not found"}, status_code=404)
+            return _json_error("job not found", 404)
         job = dict(row)
     return JSONResponse(job)
 
@@ -119,8 +199,8 @@ async def create_job(request: Any) -> JSONResponse:
     client = (body.get("client") or "").strip()
     site = (body.get("site") or "").strip()
     if not client or not site:
-        return JSONResponse({"detail": "client and site are required"}, status_code=400)
-    created_at = datetime.now(timezone.utc).isoformat()
+        return _json_error("client and site are required")
+    created_at = _now_iso()
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute(
             "INSERT INTO jobs (client, site, status, created_at) VALUES (?, ?, 'draft', ?)",
@@ -128,40 +208,41 @@ async def create_job(request: Any) -> JSONResponse:
         )
         job_id = cur.lastrowid
         con.commit()
+    _record_job_event(job_id, "created", "Job created by API")
     return JSONResponse({"ok": True, "job_id": job_id})
 
 async def approve_job(request: Request) -> JSONResponse:
     job_id = int(request.path_params["job_id"])
     body = await request.json()
     note = (body.get("note") or "").strip()
-    decided_at = datetime.now(timezone.utc).isoformat()
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
         if cur.fetchone() is None:
-            return JSONResponse({"detail": "job not found"}, status_code=404)
+            return _json_error("job not found", 404)
         con.execute("UPDATE jobs SET status = 'approved' WHERE id = ?", (job_id,))
         con.execute(
             "INSERT INTO approvals (job_id, decision, note, decided_at) VALUES (?, 'approved', ?, ?)",
-            (job_id, note, decided_at),
+            (job_id, note, _now_iso()),
         )
         con.commit()
+    _record_job_event(job_id, "approved", note or "Job approved")
     return JSONResponse({"ok": True, "status": "approved"})
 
 async def reject_job(request: Request) -> JSONResponse:
     job_id = int(request.path_params["job_id"])
     body = await request.json()
     note = (body.get("note") or "").strip()
-    decided_at = datetime.now(timezone.utc).isoformat()
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute("SELECT id FROM jobs WHERE id = ?", (job_id,))
         if cur.fetchone() is None:
-            return JSONResponse({"detail": "job not found"}, status_code=404)
+            return _json_error("job not found", 404)
         con.execute("UPDATE jobs SET status = 'rejected' WHERE id = ?", (job_id,))
         con.execute(
             "INSERT INTO approvals (job_id, decision, note, decided_at) VALUES (?, 'rejected', ?, ?)",
-            (job_id, note, decided_at),
+            (job_id, note, _now_iso()),
         )
         con.commit()
+    _record_job_event(job_id, "rejected", note or "Job rejected")
     return JSONResponse({"ok": True, "status": "rejected"})
 
 async def list_leads(request: Any) -> JSONResponse:
@@ -180,8 +261,8 @@ async def create_lead(request: Any) -> JSONResponse:
     company = (body.get("company") or "").strip()
     interest = (body.get("interest") or "demo").strip()
     if not first or not last or not email:
-        return JSONResponse({"detail": "first_name, last_name and email are required"}, status_code=400)
-    created_at = datetime.now(timezone.utc).isoformat()
+        return _json_error("first_name, last_name and email are required")
+    created_at = _now_iso()
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute(
             "INSERT INTO leads (first_name, last_name, email, phone, company, interest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -190,11 +271,7 @@ async def create_lead(request: Any) -> JSONResponse:
         lead_id = cur.lastrowid
         con.commit()
     try:
-        send_email(
-            subject="New lead: " + first + " " + last,
-            body="New lead\nName: " + first + " " + last + "\nEmail: " + email + "\nPhone: " + phone + "\nCompany: " + company + "\nInterest: " + interest,
-            to_addr="dimakatso@smartbiz.local",
-        )
+        _send_email("New lead: " + first + " " + last, "New lead\nName: " + first + " " + last + "\nEmail: " + email + "\nPhone: " + phone + "\nCompany: " + company + "\nInterest: " + interest)
     except Exception:
         pass
     return JSONResponse({"ok": True, "lead_id": lead_id})
@@ -205,12 +282,12 @@ async def generate_document(request: Request) -> JSONResponse:
         con.row_factory = sqlite3.Row
         row = con.execute("SELECT id, client, site, status, created_at FROM jobs WHERE id = ?", (job_id,)).fetchone()
         if not row:
-            return JSONResponse({"detail": "job not found"}, status_code=404)
+            return _json_error("job not found", 404)
         job = dict(row)
     doc = {
         "type": "job_summary",
         "job": job,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": _now_iso(),
         "disclaimer": "This is a stub document generated from SmartBiz MVP.",
     }
     return JSONResponse(doc)
@@ -221,11 +298,12 @@ async def app_status(request: Request) -> JSONResponse:
         leads = con.execute("SELECT COUNT(*) AS count FROM leads").fetchone()[0]
         approvals = con.execute("SELECT COUNT(*) AS count FROM approvals").fetchone()[0]
         quiz = con.execute("SELECT COUNT(*) AS count FROM quiz_results").fetchone()[0]
+        bookings = con.execute("SELECT COUNT(*) AS count FROM bookings").fetchone()[0]
     return JSONResponse({
         "service": "SmartBiz MVP",
         "status": "ok",
-        "counts": {"jobs": jobs, "leads": leads, "approvals": approvals, "quiz_results": quiz},
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "counts": {"jobs": jobs, "leads": leads, "approvals": approvals, "quiz_results": quiz, "bookings": bookings},
+        "generated_at": _now_iso(),
     })
 
 async def export_leads(request: Request) -> JSONResponse:
@@ -275,8 +353,8 @@ async def quiz_submit(request: Request) -> JSONResponse:
         if ans == "Yes":
             score += 1
     if not first or not last or not email:
-        return JSONResponse({"detail": "first_name, last_name and email are required"}, status_code=400)
-    submitted_at = datetime.now(timezone.utc).isoformat()
+        return _json_error("first_name, last_name and email are required")
+    submitted_at = _now_iso()
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute(
             "INSERT INTO quiz_results (first_name, last_name, email, phone, company, score, answers, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -290,30 +368,165 @@ async def quiz_submit(request: Request) -> JSONResponse:
     elif score >= 5:
         label = "Partially compliant"
     try:
-        send_email(
-            subject="New quiz result: " + first + " " + last,
-            body="Quiz result\nName: " + first + " " + last + "\nEmail: " + email + "\nScore: " + str(score) + "/" + str(len(QUIZ_QUESTIONS)) + "\nLabel: " + label,
-            to_addr="dimakatso@smartbiz.local",
-        )
+        _send_email("New quiz result: " + first + " " + last, "Quiz result\nName: " + first + " " + last + "\nEmail: " + email + "\nScore: " + str(score) + "/" + str(len(QUIZ_QUESTIONS)) + "\nLabel: " + label)
     except Exception:
         pass
     return JSONResponse({"ok": True, "quiz_id": quiz_id, "score": score, "label": label})
 
-def send_email(subject: str, body: str, to_addr: str) -> None:
-    host = "smtp.gmail.com"
-    port = 587
-    user = "your-email@gmail.com"
-    password = "your-app-password"
-    import smtplib
-    from email.mime.text import MIMEText
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = user
-    msg["To"] = to_addr
-    with smtplib.SMTP(host, port) as s:
-        s.starttls()
-        s.login(user, password)
-        s.send_message(msg)
+def _build_payfast_url(first: str, last: str, email: str, amount_cents: int, item_name: str, booking_id: int) -> str:
+    base = "https://sandbox.payfast.co.za/eng/process"
+    merchant_id = os.environ.get("PAYFAST_MERCHANT_ID")
+    merchant_key = os.environ.get("PAYFAST_MERCHANT_KEY")
+    if not merchant_id or not merchant_key:
+        raise RuntimeError("PayFast is not configured")
+    params = {
+        "merchant_id": merchant_id,
+        "merchant_key": merchant_key,
+        "return_url": "https://smartbiz-safety.pages.dev/booking-success.html",
+        "cancel_url": "https://smartbiz-safety.pages.dev/booking-cancel.html",
+        "notify_url": os.environ.get("SMARBIZ_API_URL", "http://localhost:8000") + "/payfast/notify",
+        "m_payment_id": str(booking_id),
+        "amount": f"{amount_cents/100:.2f}",
+        "item_name": item_name,
+        "email_address": email,
+        "name_first": first,
+        "name_last": last,
+    }
+    import urllib.parse
+    return base + "?" + "&".join(f"{k}={urllib.parse.quote_plus(str(v))}" for k, v in params.items())
+
+async def create_booking(request: Request) -> JSONResponse:
+    body = await request.json()
+    first = (body.get("first_name") or "").strip()
+    last = (body.get("last_name") or "").strip()
+    email = (body.get("email") or "").strip()
+    phone = (body.get("phone") or "").strip()
+    company = (body.get("company") or "").strip()
+    service = (body.get("service") or "site-inspection").strip()
+    amount_cents = int(body.get("amount_cents") or 0)
+    currency = (body.get("currency") or "ZAR").strip()
+    if not first or not last or not email:
+        return _json_error("first_name, last_name and email are required")
+    created_at = _now_iso()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        cur = con.execute(
+            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
+            (first, last, email, phone, company, service, amount_cents, currency, created_at),
+        )
+        booking_id = cur.lastrowid
+        con.commit()
+    try:
+        _send_email("New booking: " + first + " " + last, "Booking\nName: " + first + " " + last + "\nEmail: " + email + "\nService: " + service + "\nAmount: " + str(amount_cents) + " cents\nBooking ID: " + str(booking_id))
+    except Exception:
+        pass
+    payfast_url = ""
+    try:
+        payfast_url = _build_payfast_url(first, last, email, amount_cents, service, booking_id)
+    except Exception:
+        pass
+    return JSONResponse({"ok": True, "booking_id": booking_id, "payfast_url": payfast_url})
+
+async def payfast_notify(request: Request) -> JSONResponse:
+    body = await request.body()
+    data = dict(await request.form())
+    payment_id = data.get("m_payment_id") or data.get("custom_str1") or ""
+    pf_payment_id = data.get("pf_payment_id") or ""
+    amount_gross = data.get("amount_gross") or "0"
+    signature = data.get("signature") or ""
+    expected = hmac.new(os.environ.get("PAYFAST_MERCHANT_KEY", "").encode(), body, hashlib.md5).hexdigest()
+    if not hmac.compare_digest(expected, signature):
+        return JSONResponse({"detail": "invalid signature"}, status_code=400)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute(
+            "UPDATE bookings SET payfast_payment_id=?, payfast_pf_payment_id=? WHERE id=?",
+            (str(payment_id), str(pf_payment_id), str(payment_id)),
+        )
+        con.execute(
+            "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'payment_confirmed', ?, ?)",
+            (int(payment_id), "PayFast payment confirmed: " + str(amount_gross), _now_iso()),
+        )
+        con.commit()
+    return JSONResponse({"ok": True})
+
+async def list_bookings(request: Any) -> JSONResponse:
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at FROM bookings ORDER BY id DESC").fetchall()
+        data = [dict(r) for r in rows]
+    return JSONResponse({"bookings": data})
+
+async def get_technician_qr(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    complete_token = os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234")
+    qr_url = (os.environ.get("SMARBIZ_API_URL", "http://localhost:8000") + f"/technician/complete/{booking_id}?token={complete_token}").replace(" ", "")
+    try:
+        import qrcode, io, base64
+        img = qrcode.make(qr_url)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        encoded = base64.b64encode(buf.getvalue()).decode("ascii")
+    except Exception as e:
+        return _json_error("qr generation failed: " + str(e), 500)
+    return JSONResponse({"booking_id": booking_id, "qr_png_base64": encoded, "complete_url": qr_url})
+
+async def technician_complete(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    token = (request.query_params.get("token") or "").strip()
+    if token != os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234"):
+        return _json_error("invalid technician token", 403)
+    if not request.headers.get("x-smartbiz-token") == ADMIN_TOKEN:
+        return _json_error("admin token required", 401)
+    body = await request.json() or {}
+    visited = bool(body.get("visited"))
+    completed = bool(body.get("completed"))
+    detail = ("visited" if visited else "") + (", completed" if completed else "")
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute("SELECT id, status, amount_cents, payfast_payment_id FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        cur = con.execute("UPDATE bookings SET status='technician_completed' WHERE id=?", (booking_id,))
+        if cur.rowcount == 0:
+            return _json_error("booking not found", 404)
+        con.execute(
+            "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'technician_complete', ?, ?)",
+            (booking_id, detail or "complete", _now_iso()),
+        )
+        con.commit()
+    return JSONResponse({"ok": True, "status": "technician_completed"})
+
+async def refund_booking(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    body = await request.json() or {}
+    reason = (body.get("reason") or "").strip()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, status, amount_cents, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        if not row:
+            return _json_error("booking not found", 404)
+        created_at = datetime.fromisoformat(row["created_at"])
+        if datetime.now(timezone.utc) - created_at < timedelta(days=5):
+            return _json_error("refund window is 5 days after payment", 403)
+        con.execute("UPDATE bookings SET status='refunded' WHERE id=?", (booking_id,))
+        con.execute(
+            "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'refund', ?, ?)",
+            (booking_id, reason or "90% refund after technician no-show/failed job", _now_iso()),
+        )
+        con.commit()
+    return JSONResponse({"ok": True, "status": "refunded"})
+
+async def analytics_summary(request: Request) -> JSONResponse:
+    with lock, sqlite3.connect(DB_PATH) as con:
+        leads = con.execute("SELECT COUNT(*) AS count FROM leads").fetchone()[0]
+        bookings = con.execute("SELECT COUNT(*) AS count FROM bookings").fetchone()[0]
+        payments_confirmed = con.execute("SELECT COUNT(*) AS count FROM bookings WHERE status != 'pending'").fetchone()[0]
+        technician_completed = con.execute("SELECT COUNT(*) AS count FROM bookings WHERE status='technician_completed'").fetchone()[0]
+        refunds = con.execute("SELECT COUNT(*) AS count FROM bookings WHERE status='refunded'").fetchone()[0]
+    return JSONResponse({
+        "leads": leads,
+        "bookings": bookings,
+        "payments_confirmed": payments_confirmed,
+        "technician_completed": technician_completed,
+        "refunds": refunds,
+        "generated_at": _now_iso(),
+    })
 
 app = Starlette(
     routes=[
@@ -332,6 +545,13 @@ app = Starlette(
         Route("/api/v1/quiz/submit", quiz_submit, methods=["POST"]),
         Route("/leads/export", export_leads, methods=["GET"]),
         Route("/quiz/export", export_quiz, methods=["GET"]),
+        Route("/api/v1/bookings", create_booking, methods=["POST"]),
+        Route("/api/v1/bookings", list_bookings, methods=["GET"]),
+        Route("/bookings/{booking_id}/qr", get_technician_qr, methods=["GET"]),
+        Route("/technician/complete/{booking_id}", technician_complete, methods=["POST"]),
+        Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
+        Route("/payfast/notify", payfast_notify, methods=["POST"]),
+        Route("/api/v1/analytics/summary", analytics_summary, methods=["GET"]),
     ],
     middleware=[Middleware(SimpleTokenMiddleware)],
 )

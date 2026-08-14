@@ -121,7 +121,9 @@
           <option value="risk-assessment">Free Risk Assessment</option>
           <option value="service">Book a Service</option>
           <option value="training">Safety Training</option>
+          <option value="equipment-supply">Equipment Supply</option>
         </select>
+        <input type="hidden" name="quiz_service" value="" />
         <div class="full">
           <button class="btn btn-primary" type="submit">Get Started Free</button>
         </div>
@@ -167,20 +169,33 @@
       e.preventDefault();
       const msg = document.getElementById('lead-message');
       const form = e.target;
-      const payload = Object.fromEntries(new FormData(form).entries());
+      const data = Object.fromEntries(new FormData(form).entries());
+      const payload = {
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        company: data.company || '',
+        service: data.quiz_service || data.interest || 'site-inspection',
+        amount_cents: data.interest === 'equipment-supply' ? 15000 : 5000,
+        currency: 'ZAR',
+      };
       try {
-        const r = await fetch(API_BASE + '/api/v1/leads', {
+        const r = await request('/api/v1/bookings', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        const data = await r.json();
+        const res = await r.json();
         if (r.ok) {
-          msg.textContent = 'Thanks — we received your request.';
+          if (res.payfast_url) {
+            window.location.href = res.payfast_url;
+            return;
+          }
+          msg.textContent = 'Booking created. Payment will be arranged.';
           msg.className = 'msg full ok';
           form.reset();
         } else {
-          msg.textContent = data.detail || 'Submission failed.';
+          msg.textContent = res.detail || 'Submission failed.';
           msg.className = 'msg full err';
         }
       } catch (err) {
@@ -200,7 +215,7 @@
         const r = await request('/api/v1/status', { method: 'GET' });
         const data = await r.json();
         if (r.ok) {
-          msg.textContent = `API OK — jobs: ${data.counts.jobs}, leads: ${data.counts.leads}, approvals: ${data.counts.approvals}`;
+          msg.textContent = `API OK — jobs: ${data.counts.jobs}, leads: ${data.counts.leads}, bookings: ${data.counts.bookings}`;
           msg.className = 'msg ok';
         } else {
           msg.textContent = data.detail || 'Status check failed.';
@@ -249,17 +264,37 @@
       submit.textContent = 'Submit Quiz';
       submit.onclick = submitQuiz;
       actions.appendChild(submit);
+
+      const book = document.createElement('button');
+      book.className = 'btn';
+      book.textContent = 'Book Service / Equipment';
+      book.onclick = () => {
+        const score = Object.values(quizAnswers).filter(v => v === 'Yes').length;
+        const service = score >= 5 ? 'site-inspection' : 'emergency-support';
+        const interest = score >= 7 ? 'service' : 'equipment-supply';
+        window.location.hash = '#lead';
+        const form = document.getElementById('lead-form');
+        form.querySelector('select[name="interest"]').value = interest || 'service';
+        const svcInput = document.createElement('input');
+        svcInput.type = 'hidden';
+        svcInput.name = 'quiz_service';
+        svcInput.value = service;
+        form.appendChild(svcInput);
+      };
+      actions.appendChild(book);
       area.appendChild(actions);
     }
 
     async function submitQuiz() {
       const msg = document.getElementById('quiz-result');
+      const form = document.getElementById('lead-form');
+      const nameInputs = form.querySelectorAll('input[name="first_name"], input[name="last_name"], input[name="email"], input[name="phone"], input[name="company"]');
       const payload = {
-        first_name: '',
-        last_name: '',
-        email: '',
-        phone: '',
-        company: '',
+        first_name: form.querySelector('input[name="first_name"]')?.value || '',
+        last_name: form.querySelector('input[name="last_name"]')?.value || '',
+        email: form.querySelector('input[name="email"]')?.value || '',
+        phone: form.querySelector('input[name="phone"]')?.value || '',
+        company: form.querySelector('input[name="company"]')?.value || '',
         answers: quizAnswers,
       };
       try {
@@ -271,6 +306,9 @@
         if (r.ok) {
           msg.textContent = `Score: ${data.score}/${quizQuestions.length} — ${data.label}`;
           msg.className = 'msg ok';
+          if (data.score <= 3) {
+            msg.textContent += ' You likely need equipment or urgent inspection.';
+          }
         } else {
           msg.textContent = data.detail || 'Quiz failed.';
           msg.className = 'msg err';
