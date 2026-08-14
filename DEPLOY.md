@@ -24,6 +24,9 @@ PAYFAST_MERCHANT_ID=your-payfast-id
 PAYFAST_MERCHANT_KEY=your-payfast-key
 SMARBIZ_TECHNICIAN_TOKEN=your-tech-token
 SMARBIZ_API_URL=https://your-api.example.com
+XERO_CLIENT_ID=your-xero-client-id
+XERO_CLIENT_SECRET=your-xero-client-secret
+XERO_TENANT_ID=your-xero-tenant-id
 ```
 
 ## Cloudflare Pages

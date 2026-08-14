@@ -16,6 +16,10 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 import json
+import base64
+import urllib.error
+import urllib.parse
+import urllib.request
 
 DB_PATH = "smartbiz.sqlite"
 lock = threading.Lock()
@@ -528,6 +532,157 @@ async def analytics_summary(request: Request) -> JSONResponse:
         "generated_at": _now_iso(),
     })
 
+def _xero_configured() -> bool:
+    return all([
+        os.environ.get("XERO_CLIENT_ID"),
+        os.environ.get("XERO_CLIENT_SECRET"),
+        os.environ.get("XERO_TENANT_ID"),
+    ])
+
+def _xero_token() -> str | None:
+    if not _xero_configured():
+        return None
+    token_url = "https://identity.xero.com/connect/token"
+    data = urllib.parse.urlencode({
+        "grant_type": "client_credentials",
+        "scope": "accounting.transactions offline_access",
+    }).encode()
+    req = urllib.request.Request(token_url, data=data, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    basic = base64.b64encode((os.environ["XERO_CLIENT_ID"] + ":" + os.environ["XERO_CLIENT_SECRET"]).encode()).decode()
+    req.add_header("Authorization", "Basic " + basic)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            payload = json.loads(r.read().decode())
+            return payload.get("access_token")
+    except Exception as e:
+        raise RuntimeError("xero token failed: " + str(e))
+
+import base64
+import urllib.parse
+
+async def xero_sync_contact(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    if not _xero_configured():
+        return _json_error("Xero is not configured", 400)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, first_name, last_name, email, phone, company, service, amount_cents, currency, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        if not row:
+            return _json_error("booking not found", 404)
+        booking = dict(row)
+    token = _xero_token()
+    contact = {
+        "Name": (booking.get("first_name") or "") + " " + (booking.get("last_name") or ""),
+        "EmailAddress": booking.get("email") or "",
+        "Phones": [{"PhoneType": "DEFAULT", "PhoneNumber": booking.get("phone") or ""}],
+        "ContactStatus": "ACTIVE",
+    }
+    url = "https://api.xero.com/api.xro/2.0/Contacts"
+    payload = json.dumps({"Contacts": [contact]}).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token,
+        "Xero-tenant-id": os.environ["XERO_TENANT_ID"],
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            body = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return _json_error("xero contact failed: " + str(e.read().decode()), e.code)
+    except Exception as e:
+        return _json_error("xero contact failed: " + str(e), 500)
+    return JSONResponse({"ok": True, "contact": body.get("Contacts", [None])[0]})
+
+async def xero_create_invoice(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    if not _xero_configured():
+        return _json_error("Xero is not configured", 400)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, first_name, last_name, email, amount_cents, currency FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        if not row:
+            return _json_error("booking not found", 404)
+        booking = dict(row)
+    token = _xero_token()
+    contact_name = (booking.get("first_name") or "") + " " + (booking.get("last_name") or "")
+    amount = (booking.get("amount_cents") or 0) / 100.0
+    invoice = {
+        "Type": "ACCREC",
+        "Contact": {"Name": contact_name},
+        "LineItems": [
+            {
+                "Description": "SmartBiz booking/service",
+                "Quantity": 1.0,
+                "UnitAmount": amount,
+                "AccountCode": "200",
+            }
+        ],
+        "Status": "AUTHORISED",
+    }
+    url = "https://api.xero.com/api.xro/2.0/Invoices"
+    payload = json.dumps({"Invoices": [invoice]}).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token,
+        "Xero-tenant-id": os.environ["XERO_TENANT_ID"],
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            body = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return _json_error("xero invoice failed: " + str(e.read().decode()), e.code)
+    except Exception as e:
+        return _json_error("xero invoice failed: " + str(e), 500)
+    return JSONResponse({"ok": True, "invoice": body.get("Invoices", [None])[0]})
+
+async def xero_refund_credit_note(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    if not _xero_configured():
+        return _json_error("Xero is not configured", 400)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, first_name, last_name, email, amount_cents, currency, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        if not row:
+            return _json_error("booking not found", 404)
+        created_at = datetime.fromisoformat(row["created_at"])
+        if datetime.now(timezone.utc) - created_at < timedelta(days=5):
+            return _json_error("refund window is 5 days after payment", 403)
+        booking = dict(row)
+    token = _xero_token()
+    contact_name = (booking.get("first_name") or "") + " " + (booking.get("last_name") or "")
+    amount = (booking.get("amount_cents") or 0) / 100.0
+    credit_note = {
+        "Type": "CREDITNOTE",
+        "Contact": {"Name": contact_name},
+        "LineItems": [
+            {
+                "Description": "Refund after technician no-show/failed job",
+                "Quantity": 1.0,
+                "UnitAmount": amount,
+                "AccountCode": "200",
+            }
+        ],
+    }
+    url = "https://api.xero.com/api.xro/2.0/CreditNotes"
+    payload = json.dumps({"CreditNotes": [credit_note]}).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + token,
+        "Xero-tenant-id": os.environ["XERO_TENANT_ID"],
+    })
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            body = json.loads(r.read().decode())
+    except urllib.error.HTTPError as e:
+        return _json_error("xero credit note failed: " + str(e.read().decode()), e.code)
+    except Exception as e:
+        return _json_error("xero credit note failed: " + str(e), 500)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute("UPDATE bookings SET status='refunded' WHERE id=?", (booking_id,))
+        con.execute("INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'refund', ?, ?)", (booking_id, "90% refund after technician no-show/failed job", _now_iso()))
+        con.commit()
+    return JSONResponse({"ok": True, "credit_note": body.get("CreditNotes", [None])[0]})
+
 app = Starlette(
     routes=[
         Route("/", homepage),
@@ -552,6 +707,9 @@ app = Starlette(
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),
         Route("/api/v1/analytics/summary", analytics_summary, methods=["GET"]),
+        Route("/xero/bookings/{booking_id}/contact", xero_sync_contact, methods=["POST"]),
+        Route("/xero/bookings/{booking_id}/invoice", xero_create_invoice, methods=["POST"]),
+        Route("/xero/bookings/{booking_id}/creditnote", xero_refund_credit_note, methods=["POST"]),
     ],
     middleware=[Middleware(SimpleTokenMiddleware)],
 )

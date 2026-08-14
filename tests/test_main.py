@@ -187,3 +187,16 @@ def test_refund_window_enforced():
     refund = client.post(f"/bookings/{booking_id}/refund", json={"reason": "no-show"}, headers={"x-smartbiz-token": "dev"})
     assert refund.status_code == 403
     assert "refund window" in refund.json()["detail"]
+
+def test_xero_not_configured():
+    r = client.post("/api/v1/bookings", json={"first_name":"X","last_name":"R","email":"x@r.com","amount_cents":1000}, headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+
+    for path in [
+        f"/xero/bookings/{booking_id}/contact",
+        f"/xero/bookings/{booking_id}/invoice",
+        f"/xero/bookings/{booking_id}/creditnote",
+    ]:
+        resp = client.post(path, headers={"x-smartbiz-token": "dev"})
+        assert resp.status_code == 400
+        assert "not configured" in resp.json()["detail"]
