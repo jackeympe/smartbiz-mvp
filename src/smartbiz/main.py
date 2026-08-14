@@ -1,6 +1,8 @@
 from typing import Any
 from uvicorn import run
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.requests import Request
@@ -10,6 +12,14 @@ from datetime import datetime, timezone
 
 DB_PATH = "smartbiz.sqlite"
 lock = threading.Lock()
+ADMIN_TOKEN = "dev"
+
+class SimpleTokenMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
+        if request.url.path.startswith(("/jobs", "/api/v1/documents")):
+            if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+                return JSONResponse({"detail": "missing or invalid token"}, status_code=401)
+        return await call_next(request)
 
 def init_db() -> None:
     with lock, sqlite3.connect(DB_PATH) as con:
@@ -169,18 +179,21 @@ async def generate_document(request: Request) -> JSONResponse:
     }
     return JSONResponse(doc)
 
-app = Starlette(routes=[
-    Route("/", homepage),
-    Route("/health", health, methods=["GET"]),
-    Route("/jobs", list_jobs, methods=["GET"]),
-    Route("/jobs", create_job, methods=["POST"]),
-    Route("/jobs/{job_id}", get_job, methods=["GET"]),
-    Route("/jobs/{job_id}/approve", approve_job, methods=["POST"]),
-    Route("/jobs/{job_id}/reject", reject_job, methods=["POST"]),
-    Route("/leads", list_leads, methods=["GET"]),
-    Route("/api/v1/leads", create_lead, methods=["POST"]),
-    Route("/api/v1/documents/{job_id}", generate_document, methods=["GET"]),
-])
+app = Starlette(
+    routes=[
+        Route("/", homepage),
+        Route("/health", health, methods=["GET"]),
+        Route("/jobs", list_jobs, methods=["GET"]),
+        Route("/jobs", create_job, methods=["POST"]),
+        Route("/jobs/{job_id}", get_job, methods=["GET"]),
+        Route("/jobs/{job_id}/approve", approve_job, methods=["POST"]),
+        Route("/jobs/{job_id}/reject", reject_job, methods=["POST"]),
+        Route("/leads", list_leads, methods=["GET"]),
+        Route("/api/v1/leads", create_lead, methods=["POST"]),
+        Route("/api/v1/documents/{job_id}", generate_document, methods=["GET"]),
+    ],
+    middleware=[Middleware(SimpleTokenMiddleware)],
+)
 
 if __name__ == "__main__":
     run(app, host="0.0.0.0", port=8000)

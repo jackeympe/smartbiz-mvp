@@ -92,6 +92,7 @@
 
   <script>
     const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) || 'http://localhost:8000';
+    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
 
     function setMsg(id, text, kind='') {
       const el = document.getElementById(id);
@@ -100,10 +101,21 @@
       el.className = 'msg ' + kind;
     }
 
+    async function request(path, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-smartbiz-token': ADMIN_TOKEN,
+        ...(options.headers || {})
+      };
+      const init = { ...options, headers };
+      const r = await fetch(API_BASE + path, init);
+      return r;
+    }
+
     async function loadJobs() {
       setMsg('jobs-msg', 'Loading...');
       try {
-        const r = await fetch(API_BASE + '/jobs');
+        const r = await request('/jobs');
         const data = await r.json();
         const tbody = document.getElementById('jobs-table');
         tbody.innerHTML = '';
@@ -122,7 +134,7 @@
     async function loadLeads() {
       setMsg('leads-msg', 'Loading...');
       try {
-        const r = await fetch(API_BASE + '/leads');
+        const r = await request('/leads');
         const data = await r.json();
         const tbody = document.getElementById('leads-table');
         tbody.innerHTML = '';
@@ -145,7 +157,7 @@
       const id = btn.dataset.id;
       if (action === 'approve' || action === 'reject') {
         const path = action === 'approve' ? '/approve' : '/reject';
-        const r = await fetch(API_BASE + '/jobs/' + id + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: action }) });
+        const r = await request('/jobs/' + id + path, { method: 'POST', body: JSON.stringify({ note: action }) });
         const data = await r.json();
         if (r.ok) {
           setMsg('jobs-msg', `Job ${id} ${data.status}.`, 'ok');
@@ -154,7 +166,7 @@
           setMsg('jobs-msg', data.detail || 'Action failed.', 'err');
         }
       } else if (action === 'doc') {
-        const r = await fetch(API_BASE + '/api/v1/documents/' + id);
+        const r = await request('/api/v1/documents/' + id);
         const data = await r.json();
         if (r.ok) {
           setMsg('jobs-msg', 'Document stub: ' + data.type + '.', 'ok');
