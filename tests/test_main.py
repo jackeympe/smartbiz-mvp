@@ -105,3 +105,19 @@ def test_quiz_submit_returns_score():
     assert "score" in body
     assert "label" in body
     assert body["score"] == 3
+
+def test_export_leads_json():
+    client.post("/api/v1/leads", json={"first_name":"E","last_name":"L","email":"e@l.com"})
+    r = client.get("/leads/export", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    data = r.json()
+    assert "leads" in data
+    assert any(item["email"] == "e@l.com" for item in data["leads"])
+
+def test_export_quiz_csv():
+    client.post("/api/v1/quiz/submit", json={"first_name":"Q","last_name":"T","email":"q@t.com","answers":{"q1":"Yes"}})
+    r = client.get("/quiz/export?format=csv", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    data = r.json()
+    assert "csv" in data
+    assert "first_name,last_name,email" in data["csv"]

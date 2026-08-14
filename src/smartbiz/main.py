@@ -215,6 +215,36 @@ async def app_status(request: Request) -> JSONResponse:
         "generated_at": datetime.now(timezone.utc).isoformat(),
     })
 
+async def export_leads(request: Request) -> JSONResponse:
+    fmt = (request.query_params.get("format") or "json").lower()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, created_at FROM leads ORDER BY id DESC").fetchall()
+        data = [dict(r) for r in rows]
+    if fmt == "csv":
+        import csv, io
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=["id", "first_name", "last_name", "email", "phone", "company", "interest", "created_at"])
+        writer.writeheader()
+        writer.writerows(data)
+        return JSONResponse({"csv": buf.getvalue()})
+    return JSONResponse({"leads": data})
+
+async def export_quiz(request: Request) -> JSONResponse:
+    fmt = (request.query_params.get("format") or "json").lower()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, score, answers, submitted_at FROM quiz_results ORDER BY id DESC").fetchall()
+        data = [dict(r) for r in rows]
+    if fmt == "csv":
+        import csv, io
+        buf = io.StringIO()
+        writer = csv.DictWriter(buf, fieldnames=["id", "first_name", "last_name", "email", "phone", "company", "score", "answers", "submitted_at"])
+        writer.writeheader()
+        writer.writerows(data)
+        return JSONResponse({"csv": buf.getvalue()})
+    return JSONResponse({"quiz_results": data})
+
 async def quiz_questions(request: Request) -> JSONResponse:
     return JSONResponse({"questions": QUIZ_QUESTIONS})
 
@@ -263,6 +293,8 @@ app = Starlette(
         Route("/api/v1/status", app_status, methods=["GET"]),
         Route("/api/v1/quiz/questions", quiz_questions, methods=["GET"]),
         Route("/api/v1/quiz/submit", quiz_submit, methods=["POST"]),
+        Route("/leads/export", export_leads, methods=["GET"]),
+        Route("/quiz/export", export_quiz, methods=["GET"]),
     ],
     middleware=[Middleware(SimpleTokenMiddleware)],
 )

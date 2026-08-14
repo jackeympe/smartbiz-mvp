@@ -60,6 +60,8 @@
         <h2>Jobs</h2>
         <div class="row">
           <button class="btn" onclick="loadJobs()">Refresh</button>
+          <button class="btn" id="export-leads" onclick="exportLeads()">Export Leads</button>
+          <button class="btn" id="export-quiz" onclick="exportQuiz()">Export Quiz</button>
         </div>
         <div id="jobs-msg" class="msg"></div>
         <div style="max-height: 420px; overflow: auto;">
@@ -180,6 +182,48 @@
     document.getElementById('jobs-table').addEventListener('click', act);
     loadJobs();
     loadLeads();
+
+    async function exportLeads() {
+      try {
+        const r = await request('/leads/export?format=csv');
+        const data = await r.json();
+        if (r.ok && data.csv) {
+          downloadBlob('leads.csv', data.csv, 'text/csv');
+          setMsg('jobs-msg', 'Leads exported.', 'ok');
+        } else {
+          setMsg('jobs-msg', 'Export failed.', 'err');
+        }
+      } catch (e) {
+        setMsg('jobs-msg', 'Export failed.', 'err');
+      }
+    }
+
+    async function exportQuiz() {
+      try {
+        const r = await request('/quiz/export?format=csv');
+        const data = await r.json();
+        if (r.ok && data.csv) {
+          downloadBlob('quiz_results.csv', data.csv, 'text/csv');
+          setMsg('jobs-msg', 'Quiz exported.', 'ok');
+        } else {
+          setMsg('jobs-msg', 'Export failed.', 'err');
+        }
+      } catch (e) {
+        setMsg('jobs-msg', 'Export failed.', 'err');
+      }
+    }
+
+    function downloadBlob(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   </script>
 </body>
 </html>
