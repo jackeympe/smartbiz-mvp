@@ -8,12 +8,21 @@ def test_health():
     assert r.status_code == 200
     assert r.json() == {"status": "ok"}
 
-def test_create_job():
-    r = client.post("/jobs", json={"id": 1, "title": "Service A"})
+def test_jobs_create_and_list():
+    r = client.post("/jobs", json={"client": "Jack", "site": "Site A"})
     assert r.status_code == 200
     body = r.json()
     assert body["ok"] is True
-    assert body["job"] == {"id": 1, "title": "Service A"}
+    assert "job_id" in body
+
+    r2 = client.get("/jobs")
+    assert r2.status_code == 200
+    data = r2.json()["jobs"]
+    assert any(item["client"] == "Jack" and item["site"] == "Site A" for item in data)
+
+def test_job_requires_fields():
+    r = client.post("/jobs", json={})
+    assert r.status_code == 400
 
 def test_create_lead_persists_and_lists():
     payload = {
