@@ -14,9 +14,17 @@ DB_PATH = "smartbiz.sqlite"
 lock = threading.Lock()
 ADMIN_TOKEN = "dev"
 
+QUIZ_QUESTIONS = [
+  {"id": "q1", "text": "Do you have a current fire risk assessment on file?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q2", "text": "Are your fire extinguishers serviced annually?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q3", "text": "Do you have a clear evacuation plan and signage?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q4", "text": "Has your team done fire warden training this year?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q5", "text": "Are smoke/heat detectors tested quarterly?", "options": ["Yes", "No", "Not sure"]},
+]
+
 class SimpleTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
-        if request.url.path.startswith(("/jobs", "/api/v1/documents")):
+        if request.url.path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads")):
             if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
                 return JSONResponse({"detail": "missing or invalid token"}, status_code=401)
         return await call_next(request)
@@ -56,6 +64,21 @@ def init_db() -> None:
               decision TEXT NOT NULL,
               note TEXT NOT NULL DEFAULT '',
               decided_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quiz_results (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              first_name TEXT NOT NULL,
+              last_name TEXT NOT NULL,
+              email TEXT NOT NULL,
+              phone TEXT NOT NULL DEFAULT '',
+              company TEXT NOT NULL DEFAULT '',
+              score INTEGER NOT NULL DEFAULT 0,
+              answers TEXT NOT NULL DEFAULT '{}',
+              submitted_at TEXT NOT NULL DEFAULT ''
             )
             """
         )
@@ -184,12 +207,46 @@ async def app_status(request: Request) -> JSONResponse:
         jobs = con.execute("SELECT COUNT(*) AS count FROM jobs").fetchone()[0]
         leads = con.execute("SELECT COUNT(*) AS count FROM leads").fetchone()[0]
         approvals = con.execute("SELECT COUNT(*) AS count FROM approvals").fetchone()[0]
+        quiz = con.execute("SELECT COUNT(*) AS count FROM quiz_results").fetchone()[0]
     return JSONResponse({
         "service": "SmartBiz MVP",
         "status": "ok",
-        "counts": {"jobs": jobs, "leads": leads, "approvals": approvals},
+        "counts": {"jobs": jobs, "leads": leads, "approvals": approvals, "quiz_results": quiz},
         "generated_at": datetime.now(timezone.utc).isoformat(),
     })
+
+async def quiz_questions(request: Request) -> JSONResponse:
+    return JSONResponse({"questions": QUIZ_QUESTIONS})
+
+async def quiz_submit(request: Request) -> JSONResponse:
+    body = await request.json()
+    first = (body.get("first_name") or "").strip()
+    last = (body.get("last_name") or "").strip()
+    email = (body.get("email") or "").strip()
+    phone = (body.get("phone") or "").strip()
+    company = (body.get("company") or "").strip()
+    answers = body.get("answers") or {}
+    score = 0
+    for q in QUIZ_QUESTIONS:
+        ans = answers.get(q["id"])
+        if ans == "Yes":
+            score += 1
+    if not first or not last or not email:
+        return JSONResponse({"detail": "first_name, last_name and email are required"}, status_code=400)
+    submitted_at = datetime.now(timezone.utc).isoformat()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        cur = con.execute(
+            "INSERT INTO quiz_results (first_name, last_name, email, phone, company, score, answers, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (first, last, email, phone, company, score, str(answers), submitted_at),
+        )
+        quiz_id = cur.lastrowid
+        con.commit()
+    label = "Needs review"
+    if score >= 4:
+        label = "Mostly compliant"
+    elif score == 3:
+        label = "Partially compliant"
+    return JSONResponse({"ok": True, "quiz_id": quiz_id, "score": score, "label": label})
 
 app = Starlette(
     routes=[
@@ -204,6 +261,8 @@ app = Starlette(
         Route("/api/v1/leads", create_lead, methods=["POST"]),
         Route("/api/v1/documents/{job_id}", generate_document, methods=["GET"]),
         Route("/api/v1/status", app_status, methods=["GET"]),
+        Route("/api/v1/quiz/questions", quiz_questions, methods=["GET"]),
+        Route("/api/v1/quiz/submit", quiz_submit, methods=["POST"]),
     ],
     middleware=[Middleware(SimpleTokenMiddleware)],
 )

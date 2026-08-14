@@ -80,3 +80,28 @@ def test_create_lead_requires_fields():
 def test_token_gate():
     r = client.get("/jobs")
     assert r.status_code == 401
+
+def test_quiz_questions():
+    r = client.get("/api/v1/quiz/questions")
+    assert r.status_code == 200
+    body = r.json()
+    assert "questions" in body
+    assert len(body["questions"]) == 5
+
+def test_quiz_submit_requires_contact():
+    r = client.post("/api/v1/quiz/submit", json={"answers": {"q1": "Yes"}})
+    assert r.status_code == 400
+
+def test_quiz_submit_returns_score():
+    payload = {
+        "first_name": "Quiz",
+        "last_name": "User",
+        "email": "quiz@example.com",
+        "answers": {"q1": "Yes", "q2": "Yes", "q3": "No", "q4": "Yes", "q5": "No"}
+    }
+    r = client.post("/api/v1/quiz/submit", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    assert "score" in body
+    assert "label" in body
+    assert body["score"] == 3

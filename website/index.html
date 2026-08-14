@@ -41,7 +41,7 @@
     .hero h1 { font-size: 46px; line-height: 1.1; margin: 0 0 14px; }
     .hero p { color: var(--muted); font-size: 18px; max-width: 760px; margin: 0 auto 28px; }
     .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--text); text-decoration: none; font-weight: 600; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--text); text-decoration: none; font-weight: 600; cursor: pointer; }
     .btn:hover { background: rgba(255,255,255,0.14); }
     .btn-primary { background: linear-gradient(135deg, var(--accent), #b91c1c); border-color: transparent; }
     .btn-primary:hover { filter: brightness(1.05); }
@@ -61,6 +61,12 @@
     .tile p { margin: 0; color: var(--muted); font-size: 13px; }
     .lead { margin-top: 44px; padding: 24px; border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.14); }
     .lead h2 { margin: 0 0 14px; font-size: 24px; }
+    .quiz { margin-top: 18px; padding: 18px; border-radius: 14px; background: rgba(15,23,36,0.6); border: 1px solid rgba(255,255,255,0.12); }
+    .question { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+    .options { display: grid; gap: 8px; }
+    .option { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
+    .option.selected { border-color: var(--accent-2); background: rgba(249,115,22,0.15); }
+    .actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
     form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .full { grid-column: 1 / -1; }
     input, select, textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,36,0.6); color: var(--text); }
@@ -70,6 +76,7 @@
     .ok { color: var(--success); }
     .err { color: var(--error); }
     .muted { color: var(--muted); }
+    .hidden { display: none; }
     @media (max-width: 860px) { .cards, .stats, .grid-3 { grid-template-columns: 1fr; } .hero h1 { font-size: 30px; } form { grid-template-columns: 1fr; } }
   </style>
 </head>
@@ -92,7 +99,7 @@
       <div class="cta-row">
         <a class="btn btn-primary" href="#lead">Get Compliant Now — It’s Free</a>
         <a class="btn" href="#modules">Explore Modules</a>
-        <button class="btn" id="status-btn" onclick="checkStatus()">Check API Status</button>
+        <button class="btn" id="start-quiz">Start Compliance Quiz</button>
       </div>
       <div id="status-msg" class="msg" style="text-align:center; max-width: 760px; margin: 10px auto 0;"></div>
       <div class="stats">
@@ -144,6 +151,12 @@
       </form>
     </section>
 
+    <section class="lead" style="margin-top: 44px;">
+      <h2>Compliance Quiz</h2>
+      <p class="muted">Answer 5 quick questions and we’ll show your readiness score.</p>
+      <div id="quiz-area"></div>
+    </section>
+
     <footer style="margin-top:44px; padding: 18px 0; border-top: 1px solid rgba(255,255,255,0.08); color: var(--muted); font-size: 13px;">
       SmartBiz Fire Safety · SAQCC-Fire Reg. 22/064
     </footer>
@@ -151,6 +164,26 @@
 
   <script>
     const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) || 'http://localhost:8000';
+    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
+
+    async function request(path, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-smartbiz-token': ADMIN_TOKEN,
+        ...(options.headers || {})
+      };
+      const init = { ...options, headers };
+      const r = await fetch(API_BASE + path, init);
+      return r;
+    }
+
+    function setMsg(id, text, kind='') {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg ' + kind;
+    }
+
     async function submitLead(e) {
       e.preventDefault();
       const msg = document.getElementById('lead-message');
@@ -159,7 +192,7 @@
       try {
         const r = await fetch(API_BASE + '/api/v1/leads', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-smartbiz-token': 'dev' },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         const data = await r.json();
@@ -185,12 +218,8 @@
     async function checkStatus() {
       const msg = document.getElementById('status-msg');
       try {
-        const r = await fetch(API_BASE + '/api/v1/status', {
+        const r = await request('/api/v1/status', {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-smartbiz-token': (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev'
-          }
         });
         const data = await r.json();
         if (r.ok) {
@@ -205,6 +234,85 @@
         msg.className = 'msg err';
       }
     }
+
+    let quizQuestions = [];
+    let quizAnswers = {};
+    async function loadQuiz() {
+      const r = await request('/api/v1/quiz/questions');
+      const data = await r.json();
+      quizQuestions = data.questions || [];
+      renderQuiz();
+    }
+
+    function renderQuiz() {
+      const area = document.getElementById('quiz-area');
+      area.innerHTML = '';
+      quizQuestions.forEach((q, idx) => {
+        const qDiv = document.createElement('div');
+        qDiv.className = 'quiz';
+        qDiv.innerHTML = `<div class="question">${idx + 1}. ${q.text}</div><div class="options" id="q-${q.id}"></div>`;
+        area.appendChild(qDiv);
+        const opts = document.getElementById('q-' + q.id);
+        q.options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.className = 'option';
+          btn.textContent = opt;
+          btn.onclick = () => {
+            opts.querySelectorAll('.option').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            quizAnswers[q.id] = opt;
+          };
+          opts.appendChild(btn);
+        });
+      });
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const submit = document.createElement('button');
+      submit.className = 'btn btn-primary';
+      submit.textContent = 'Submit Quiz';
+      submit.onclick = submitQuiz;
+      actions.appendChild(submit);
+      area.appendChild(actions);
+    }
+
+    async function submitQuiz() {
+      const msg = document.createElement('div');
+      msg.className = 'msg';
+      msg.textContent = 'Submitting...';
+      document.getElementById('quiz-area').appendChild(msg);
+      const payload = {
+        first_name: '',
+        last_name: '',
+        email: '',
+        phone: '',
+        company: '',
+        answers: quizAnswers,
+      };
+      try {
+        const r = await request('/api/v1/quiz/submit', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        if (r.ok) {
+          msg.textContent = `Score: ${data.score}/5 — ${data.label}`;
+          msg.className = 'msg ok';
+        } else {
+          msg.textContent = data.detail || 'Quiz failed.';
+          msg.className = 'msg err';
+        }
+      } catch (err) {
+        msg.textContent = 'Quiz submission failed.';
+        msg.className = 'msg err';
+      }
+    }
+
+    document.getElementById('start-quiz').addEventListener('click', () => {
+      document.getElementById('quiz-area').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    loadQuiz();
+    checkStatus();
   </script>
 </body>
 </html>
