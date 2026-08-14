@@ -20,6 +20,11 @@ QUIZ_QUESTIONS = [
   {"id": "q3", "text": "Do you have a clear evacuation plan and signage?", "options": ["Yes", "No", "Not sure"]},
   {"id": "q4", "text": "Has your team done fire warden training this year?", "options": ["Yes", "No", "Not sure"]},
   {"id": "q5", "text": "Are smoke/heat detectors tested quarterly?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q6", "text": "Are emergency exits kept clear and unlocked during business hours?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q7", "text": "Do you keep a log of fire safety checks and incidents?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q8", "text": "Is your fire alarm system tested weekly?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q9", "text": "Do you have appropriate fire insurance coverage?", "options": ["Yes", "No", "Not sure"]},
+  {"id": "q10", "text": "Are flammable materials stored safely?", "options": ["Yes", "No", "Not sure"]},
 ]
 
 class SimpleTokenMiddleware(BaseHTTPMiddleware):
@@ -184,6 +189,14 @@ async def create_lead(request: Any) -> JSONResponse:
         )
         lead_id = cur.lastrowid
         con.commit()
+    try:
+        send_email(
+            subject="New lead: " + first + " " + last,
+            body="New lead\nName: " + first + " " + last + "\nEmail: " + email + "\nPhone: " + phone + "\nCompany: " + company + "\nInterest: " + interest,
+            to_addr="dimakatso@smartbiz.local",
+        )
+    except Exception:
+        pass
     return JSONResponse({"ok": True, "lead_id": lead_id})
 
 async def generate_document(request: Request) -> JSONResponse:
@@ -272,11 +285,35 @@ async def quiz_submit(request: Request) -> JSONResponse:
         quiz_id = cur.lastrowid
         con.commit()
     label = "Needs review"
-    if score >= 4:
+    if score >= 8:
         label = "Mostly compliant"
-    elif score == 3:
+    elif score >= 5:
         label = "Partially compliant"
+    try:
+        send_email(
+            subject="New quiz result: " + first + " " + last,
+            body="Quiz result\nName: " + first + " " + last + "\nEmail: " + email + "\nScore: " + str(score) + "/" + str(len(QUIZ_QUESTIONS)) + "\nLabel: " + label,
+            to_addr="dimakatso@smartbiz.local",
+        )
+    except Exception:
+        pass
     return JSONResponse({"ok": True, "quiz_id": quiz_id, "score": score, "label": label})
+
+def send_email(subject: str, body: str, to_addr: str) -> None:
+    host = "smtp.gmail.com"
+    port = 587
+    user = "your-email@gmail.com"
+    password = "your-app-password"
+    import smtplib
+    from email.mime.text import MIMEText
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = user
+    msg["To"] = to_addr
+    with smtplib.SMTP(host, port) as s:
+        s.starttls()
+        s.login(user, password)
+        s.send_message(msg)
 
 app = Starlette(
     routes=[

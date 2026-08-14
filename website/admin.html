@@ -39,62 +39,85 @@
     .msg { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 16px; }
     .ok { color: var(--success); }
     .err { color: var(--danger); }
+    .hidden { display: none; }
+    .full { grid-column: 1 / -1; }
+    .lead { padding: 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
+    .muted { color: var(--muted); }
+    input[type="password"], input[type="text"], input[type="email"] { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,36,0.6); color: var(--text); width: 100%; }
+    input:focus { outline: none; border-color: var(--accent-2); }
     @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <header>
-      <div class="brand">
-        <div class="logo">SB</div>
-        <div>
-          <div class="title">SmartBiz Admin</div>
-          <div class="subtitle">Local-first dashboard for jobs, leads, and documents.</div>
+    <section id="admin-login" class="lead">
+      <h2>Admin Login</h2>
+      <p class="muted">Enter the admin token to access the dashboard.</p>
+      <form id="admin-login-form">
+        <input id="admin-token" type="password" placeholder="Admin token" class="full" required />
+        <div class="full">
+          <button class="btn btn-primary" type="submit">Login</button>
         </div>
+        <div id="admin-login-message" class="msg full"></div>
+      </form>
+    </section>
+
+    <section id="admin-app" class="hidden">
+      <header>
+        <div class="brand">
+          <div class="logo">SB</div>
+          <div>
+            <div class="title">SmartBiz Admin</div>
+            <div class="subtitle">Local-first dashboard for jobs, leads, and documents.</div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="pill">Offline ready</div>
+          <button class="btn" id="admin-logout">Logout</button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Jobs</h2>
+          <div class="row">
+            <button class="btn" onclick="loadJobs()">Refresh</button>
+            <button class="btn" id="export-leads" onclick="exportLeads()">Export Leads</button>
+            <button class="btn" id="export-quiz" onclick="exportQuiz()">Export Quiz</button>
+          </div>
+          <div id="jobs-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Client</th><th>Site</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="jobs-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Leads</h2>
+          <div class="row">
+            <button class="btn" onclick="loadLeads()">Refresh</button>
+          </div>
+          <div id="leads-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Email</th><th>Interest</th><th>Created</th></tr>
+              </thead>
+              <tbody id="leads-table"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
-      <div class="pill">Offline ready</div>
-    </header>
-
-    <div class="grid">
-      <section class="card">
-        <h2>Jobs</h2>
-        <div class="row">
-          <button class="btn" onclick="loadJobs()">Refresh</button>
-          <button class="btn" id="export-leads" onclick="exportLeads()">Export Leads</button>
-          <button class="btn" id="export-quiz" onclick="exportQuiz()">Export Quiz</button>
-        </div>
-        <div id="jobs-msg" class="msg"></div>
-        <div style="max-height: 420px; overflow: auto;">
-          <table>
-            <thead>
-              <tr><th>ID</th><th>Client</th><th>Site</th><th>Status</th><th>Actions</th></tr>
-            </thead>
-            <tbody id="jobs-table"></tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Leads</h2>
-        <div class="row">
-          <button class="btn" onclick="loadLeads()">Refresh</button>
-        </div>
-        <div id="leads-msg" class="msg"></div>
-        <div style="max-height: 420px; overflow: auto;">
-          <table>
-            <thead>
-              <tr><th>ID</th><th>Name</th><th>Email</th><th>Interest</th><th>Created</th></tr>
-            </thead>
-            <tbody id="leads-table"></tbody>
-          </table>
-        </div>
-      </section>
-    </div>
+    </section>
   </div>
 
   <script>
     const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) || 'http://localhost:8000';
-    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
+    let ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
 
     function setMsg(id, text, kind='') {
       const el = document.getElementById(id);
@@ -113,6 +136,34 @@
       const r = await fetch(API_BASE + path, init);
       return r;
     }
+
+    function showAdmin(show) {
+      const login = document.getElementById('admin-login');
+      const app = document.getElementById('admin-app');
+      if (login) login.classList.toggle('hidden', !show);
+      if (app) app.classList.toggle('hidden', show === false);
+      if (show) {
+        loadJobs();
+        loadLeads();
+      }
+    }
+
+    document.getElementById('admin-login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const token = (document.getElementById('admin-token').value || '').trim();
+      if (!token) {
+        setMsg('admin-login-message', 'Enter a token.', 'err');
+        return;
+      }
+      ADMIN_TOKEN = token;
+      setMsg('admin-login-message', '');
+      showAdmin(true);
+    });
+
+    document.getElementById('admin-logout').addEventListener('click', () => {
+      ADMIN_TOKEN = '';
+      showAdmin(false);
+    });
 
     async function loadJobs() {
       setMsg('jobs-msg', 'Loading...');
@@ -180,8 +231,13 @@
     }
 
     document.getElementById('jobs-table').addEventListener('click', act);
-    loadJobs();
-    loadLeads();
+    document.getElementById('leads-table').addEventListener('click', act);
+
+    if (ADMIN_TOKEN) {
+      showAdmin(true);
+    } else {
+      showAdmin(false);
+    }
 
     async function exportLeads() {
       try {
