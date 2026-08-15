@@ -333,3 +333,18 @@ def test_admin_update_booking_fields():
     booking = client.get(f"/api/v1/bookings/{booking_id}/public").json()
     assert booking["status"] == "paid"
     assert booking["evidence_notes"] == "site visit done"
+
+def test_analytics_includes_request_metrics():
+    r = client.get("/api/v1/analytics/summary", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "request_count" in body
+    assert "avg_duration_ms" in body
+    assert isinstance(body["request_count"], int)
+
+def test_request_logging_middleware_records_hits():
+    client.get("/health")
+    client.get("/health")
+    with lock, sqlite3.connect(DB_PATH) as con:
+        count = con.execute("SELECT COUNT(*) FROM request_logs WHERE path='/health'").fetchone()[0]
+    assert count >= 2

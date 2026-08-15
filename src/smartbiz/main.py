@@ -84,6 +84,22 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._hits[key] = hits
         return await call_next(request)
 
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
+        start = datetime.now(timezone.utc)
+        response = await call_next(request)
+        duration_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
+        try:
+            with lock, sqlite3.connect(DB_PATH) as con:
+                con.execute(
+                    "INSERT INTO request_logs (method, path, status_code, duration_ms, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (request.method, request.url.path, response.status_code, duration_ms, _now_iso()),
+                )
+                con.commit()
+        except Exception:
+            pass
+        return response
+
 def init_db() -> None:
     with lock, sqlite3.connect(DB_PATH) as con:
         con.execute(
@@ -167,8 +183,20 @@ def init_db() -> None:
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               name TEXT NOT NULL,
               email TEXT NOT NULL,
-              pin TEXT NOT NULL DEFAULT '0000',
+              pin TEXT NOT NULL,
               active INTEGER NOT NULL DEFAULT 1,
+              created_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS request_logs (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              method TEXT NOT NULL,
+              path TEXT NOT NULL,
+              status_code INTEGER NOT NULL,
+              duration_ms INTEGER NOT NULL,
               created_at TEXT NOT NULL DEFAULT ''
             )
             """
@@ -756,12 +784,16 @@ async def analytics_summary(request: Request) -> JSONResponse:
         payments_confirmed = con.execute("SELECT COUNT(*) AS count FROM bookings WHERE status != 'pending'").fetchone()[0]
         technician_completed = con.execute("SELECT COUNT(*) AS count FROM bookings WHERE status='technician_completed'").fetchone()[0]
         refunds = con.execute("SELECT COUNT(*) AS count FROM bookings WHERE status='refunded'").fetchone()[0]
+        request_count = con.execute("SELECT COUNT(*) AS count FROM request_logs").fetchone()[0]
+        avg_duration = con.execute("SELECT AVG(duration_ms) FROM request_logs").fetchone()[0]
     return JSONResponse({
         "leads": leads,
         "bookings": bookings,
         "payments_confirmed": payments_confirmed,
         "technician_completed": technician_completed,
         "refunds": refunds,
+        "request_count": request_count or 0,
+        "avg_duration_ms": int(avg_duration or 0),
         "generated_at": _now_iso(),
     })
 
@@ -1137,6 +1169,7 @@ app = Starlette(
     middleware=[
         Middleware(SecurityHeadersMiddleware),
         Middleware(RateLimitMiddleware, max_requests=120, window_seconds=60),
+        Middleware(RequestLoggingMiddleware),
         Middleware(SimpleTokenMiddleware),
     ],
 )
