@@ -1,0 +1,37 @@
+{
+  "booking": {
+    "first_name": "Fixture",
+    "last_name": "Client",
+    "email": "fixture@example.com",
+    "phone": "0710000000",
+    "company": "FixtureCo",
+    "service": "site-inspection",
+    "amount_cents": 3000,
+    "currency": "ZAR"
+  },
+  "technician": {
+    "name": "Tech Tester",
+    "email": "tech@example.com",
+    "pin": "1234"
+  },
+  "lead": {
+    "first_name": "Lead",
+    "last_name": "User",
+    "email": "lead@example.com",
+    "phone": "0720000000",
+    "company": "LeadCo",
+    "interest": "demo"
+  },
+  "quiz_answers": {
+    "q1": "Yes",
+    "q2": "No",
+    "q3": "Yes",
+    "q4": "No",
+    "q5": "Yes",
+    "q6": "No",
+    "q7": "Yes",
+    "q8": "No",
+    "q9": "Yes",
+    "q10": "No"
+  }
+}

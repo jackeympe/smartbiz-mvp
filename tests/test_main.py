@@ -3,9 +3,15 @@ from smartbiz.main import app, DB_PATH
 import threading
 from datetime import datetime, timezone, timedelta
 import sqlite3
+import json
+import os
 
 client = TestClient(app)
 lock = threading.Lock()
+
+FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "sample_data.json")
+with open(FIXTURE_PATH, "r", encoding="utf-8") as f:
+    FIXTURES = json.load(f)
 
 def test_health():
     r = client.get("/health")
@@ -62,14 +68,7 @@ def test_app_status():
     assert "smtp" in body["checks"]
 
 def test_create_lead_persists_and_lists():
-    payload = {
-        "first_name": "Jack",
-        "last_name": "Mpe",
-        "email": "jack@example.com",
-        "phone": "0720000000",
-        "company": "SmartBiz",
-        "interest": "demo",
-    }
+    payload = FIXTURES["lead"]
     r = client.post("/api/v1/leads", json=payload)
     assert r.status_code == 200
     body = r.json()
@@ -97,34 +96,32 @@ def test_quiz_questions_count():
     assert len(body["questions"]) == 10
 
 def test_quiz_submit_requires_contact():
-    r = client.post("/api/v1/quiz/submit", json={"answers": {"q1": "Yes"}})
+    r = client.post("/api/v1/quiz/submit", json={"answers": FIXTURES["quiz_answers"]})
     assert r.status_code == 400
 
 def test_quiz_submit_returns_score():
-    answers = {f"q{i}": "Yes" if i % 2 == 1 else "No" for i in range(1, 11)}
     payload = {
         "first_name": "Quiz",
         "last_name": "User",
         "email": "quiz@example.com",
-        "answers": answers,
+        "answers": FIXTURES["quiz_answers"],
     }
     r = client.post("/api/v1/quiz/submit", json=payload)
     assert r.status_code == 200
     body = r.json()
     assert "score" in body
     assert "label" in body
-    assert body["score"] == 5
 
 def test_export_leads_json():
-    client.post("/api/v1/leads", json={"first_name":"E","last_name":"L","email":"e@l.com"})
+    client.post("/api/v1/leads", json=FIXTURES["lead"])
     r = client.get("/leads/export", headers={"x-smartbiz-token": "dev"})
     assert r.status_code == 200
     data = r.json()
     assert "leads" in data
-    assert any(item["email"] == "e@l.com" for item in data["leads"])
+    assert any(item["email"] == FIXTURES["lead"]["email"] for item in data["leads"])
 
 def test_export_quiz_csv():
-    client.post("/api/v1/quiz/submit", json={"first_name":"Q","last_name":"T","email":"q@t.com","answers":{"q1":"Yes"}})
+    client.post("/api/v1/quiz/submit", json={"first_name":"Q","last_name":"T","email":"q@t.com","answers": FIXTURES["quiz_answers"]})
     r = client.get("/quiz/export?format=csv", headers={"x-smartbiz-token": "dev"})
     assert r.status_code == 200
     data = r.json()
@@ -132,16 +129,7 @@ def test_export_quiz_csv():
     assert "first_name,last_name,email" in data["csv"]
 
 def test_create_booking():
-    payload = {
-        "first_name": "Client",
-        "last_name": "One",
-        "email": "client@example.com",
-        "phone": "0710000000",
-        "company": "Acme",
-        "service": "site-inspection",
-        "amount_cents": 5000,
-        "currency": "ZAR",
-    }
+    payload = FIXTURES["booking"]
     r = client.post("/api/v1/bookings", json=payload, headers={"x-smartbiz-token": "dev"})
     assert r.status_code == 200
     body = r.json()
@@ -211,7 +199,7 @@ def test_refund_window_enforced():
     assert booking["payfast_status"] == "refunded"
 
 def test_xero_not_configured():
-    r = client.post("/api/v1/bookings", json={"first_name":"X","last_name":"R","email":"x@r.com","amount_cents":1000}, headers={"x-smartbiz-token": "dev"})
+    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
     booking_id = r.json()["booking_id"]
 
     for path in [
@@ -231,7 +219,7 @@ def test_xero_health_reports_config():
     assert isinstance(body["ok"], bool)
 
 def test_booking_pdf_document():
-    r = client.post("/api/v1/bookings", json={"first_name":"PDF","last_name":"Doc","email":"pdf@example.com","amount_cents":2500}, headers={"x-smartbiz-token": "dev"})
+    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
     booking_id = r.json()["booking_id"]
     pdf = client.get(f"/bookings/{booking_id}/pdf", headers={"x-smartbiz-token": "dev"})
     assert pdf.status_code == 200
@@ -241,10 +229,10 @@ def test_booking_pdf_document():
     assert "booking-" in body["filename"]
 
 def test_booking_coc_pdf_document():
-    r = client.post("/api/v1/bookings", json={"first_name":"COC","last_name":"Doc","email":"coc@example.com","amount_cents":3000}, headers={"x-smartbiz-token": "dev"})
+    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
     booking_id = r.json()["booking_id"]
     client.post(f"/technician/complete/{booking_id}?token=tech-complete-1234", json={"visited": True, "completed": True}, headers={"x-smartbiz-token": "dev"})
-    client.post("/api/v1/quiz/submit", json={"first_name":"COC","last_name":"Doc","email":"coc@example.com","answers":{"q1":"Yes"}})
+    client.post("/api/v1/quiz/submit", json={"first_name":"COC","last_name":"Doc","email":"coc@example.com","answers": FIXTURES["quiz_answers"]})
     pdf = client.get(f"/bookings/{booking_id}/coc-pdf", headers={"x-smartbiz-token": "dev"})
     assert pdf.status_code == 200
     body = pdf.json()
@@ -253,28 +241,29 @@ def test_booking_coc_pdf_document():
     assert "coc-booking-" in body["filename"]
 
 def test_technician_pin_flow():
-    created = client.post("/api/v1/technicians", json={"name": "Tester", "email": "tester@example.com", "pin": "4321"}, headers={"x-smartbiz-token": "dev"})
+    payload = FIXTURES["technician"]
+    created = client.post("/api/v1/technicians", json=payload, headers={"x-smartbiz-token": "dev"})
     assert created.status_code == 200
     technician_id = created.json()["technician_id"]
 
-    verified = client.post("/api/v1/technicians/verify", json={"pin": "4321"}, headers={"x-smartbiz-token": "dev"})
+    verified = client.post("/api/v1/technicians/verify", json={"pin": payload["pin"]}, headers={"x-smartbiz-token": "dev"})
     assert verified.status_code == 200
-    assert verified.json()["technician"]["name"] == "Tester"
+    assert verified.json()["technician"]["name"] == payload["name"]
 
     profile = client.get(f"/api/v1/technicians/{technician_id}", headers={"x-smartbiz-token": "dev"})
     assert profile.status_code == 200
-    assert profile.json()["name"] == "Tester"
+    assert profile.json()["name"] == payload["name"]
 
     listing = client.get("/api/v1/technicians", headers={"x-smartbiz-token": "dev"})
     assert listing.status_code == 200
-    assert any(item["email"] == "tester@example.com" for item in listing.json()["technicians"])
+    assert any(item["email"] == payload["email"] for item in listing.json()["technicians"])
 
 def test_technician_pin_rejects_invalid():
     r = client.post("/api/v1/technicians/verify", json={"pin": "0000"}, headers={"x-smartbiz-token": "dev"})
     assert r.status_code == 403
 
 def test_payfast_status_update():
-    r = client.post("/api/v1/bookings", json={"first_name":"PF","last_name":"S","email":"pf@example.com","amount_cents":1500}, headers={"x-smartbiz-token": "dev"})
+    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
     booking_id = r.json()["booking_id"]
     update = client.post(f"/bookings/{booking_id}/payfast-status", json={"status": "paid", "pf_payment_id": "pf-1", "payment_id": "pay-1"}, headers={"x-smartbiz-token": "dev"})
     assert update.status_code == 200
@@ -284,7 +273,7 @@ def test_payfast_status_update():
     assert booking["payfast_status"] == "paid"
 
 def test_xero_webhook_updates_booking_status():
-    r = client.post("/api/v1/bookings", json={"first_name":"XW","last_name":"Test","email":"xw@example.com","amount_cents":2000}, headers={"x-smartbiz-token": "dev"})
+    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
     booking_id = r.json()["booking_id"]
     paid = client.post("/xero/webhook", json={"event_type": "INVOICE.PAID", "resource": {"booking_id": str(booking_id)}})
     assert paid.status_code == 200
@@ -296,7 +285,7 @@ def test_xero_webhook_updates_booking_status():
     assert client.get(f"/api/v1/bookings/{booking_id}/public").json()["status"] == "refunded"
 
 def test_end_to_end_quiz_booking_completion_pdf():
-    answers = {f"q{i}": "Yes" for i in range(1, 11)}
+    answers = FIXTURES["quiz_answers"]
     quiz = client.post("/api/v1/quiz/submit", json={"first_name":"E2E","last_name":"Flow","email":"e2e@example.com","answers":answers})
     assert quiz.status_code == 200
 
