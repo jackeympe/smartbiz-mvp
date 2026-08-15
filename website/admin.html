@@ -110,6 +110,30 @@
         </section>
 
         <section class="card">
+          <h2>Technicians</h2>
+          <div class="row">
+            <button class="btn" onclick="loadTechnicians()">Refresh</button>
+          </div>
+          <div id="technicians-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Email</th><th>Active</th></tr>
+              </thead>
+              <tbody id="technicians-table"></tbody>
+            </table>
+          </div>
+          <form id="tech-form" style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+            <input id="tech-name" placeholder="Name" class="full" />
+            <input id="tech-email" placeholder="Email" class="full" />
+            <input id="tech-pin" placeholder="PIN" class="full" />
+            <div class="full">
+              <button class="btn btn-primary" type="submit">Create Technician</button>
+            </div>
+            <div id="tech-form-msg" class="msg full"></div>
+          </form>
+        </section>
+        <section class="card">
           <h2>Bookings & Payments</h2>
           <div class="row">
             <button class="btn" onclick="loadBookings()">Refresh</button>
@@ -255,6 +279,46 @@
         msg.className = 'msg err';
       }
     }
+
+    async function loadTechnicians() {
+      const msg = document.getElementById('technicians-msg');
+      try {
+        const r = await request('/api/v1/technicians');
+        const data = await r.json();
+        const tbody = document.getElementById('technicians-table');
+        tbody.innerHTML = '';
+        (data.technicians || []).forEach(tech => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${tech.id}</td><td>${tech.name}</td><td>${tech.email}</td><td><span class="badge">${tech.active ? 'active' : 'inactive'}</span></td>`;
+          tbody.appendChild(tr);
+        });
+        msg.textContent = data.technicians?.length ? `Loaded ${data.technicians.length} technicians` : 'No technicians yet.';
+        msg.className = 'msg ok';
+      } catch (e) {
+        msg.textContent = 'Failed to load technicians.';
+        msg.className = 'msg err';
+      }
+    }
+
+    document.getElementById('tech-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = (document.getElementById('tech-name').value || '').trim();
+      const email = (document.getElementById('tech-email').value || '').trim();
+      const pin = (document.getElementById('tech-pin').value || '').trim();
+      if (!name || !email || !pin) {
+        setMsg('tech-form-msg', 'Name, email, and PIN are required.', 'err');
+        return;
+      }
+      const r = await request('/api/v1/technicians', { method: 'POST', body: JSON.stringify({ name, email, pin }) });
+      const data = await r.json();
+      if (r.ok) {
+        setMsg('tech-form-msg', 'Technician created.', 'ok');
+        document.getElementById('tech-form').reset();
+        loadTechnicians();
+      } else {
+        setMsg('tech-form-msg', data.detail || 'Create failed.', 'err');
+      }
+    });
 
     async function act(e) {
       const btn = e.target.closest('button[data-action]');

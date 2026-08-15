@@ -226,19 +226,19 @@ def test_booking_coc_pdf_document():
 def test_technician_pin_flow():
     created = client.post("/api/v1/technicians", json={"name": "Tester", "email": "tester@example.com", "pin": "4321"}, headers={"x-smartbiz-token": "dev"})
     assert created.status_code == 200
-    assert created.json()["technician_id"] == 1
+    technician_id = created.json()["technician_id"]
 
     verified = client.post("/api/v1/technicians/verify", json={"pin": "4321"}, headers={"x-smartbiz-token": "dev"})
     assert verified.status_code == 200
     assert verified.json()["technician"]["name"] == "Tester"
 
-    profile = client.get("/api/v1/technicians/1", headers={"x-smartbiz-token": "dev"})
+    profile = client.get(f"/api/v1/technicians/{technician_id}", headers={"x-smartbiz-token": "dev"})
     assert profile.status_code == 200
     assert profile.json()["name"] == "Tester"
 
     listing = client.get("/api/v1/technicians", headers={"x-smartbiz-token": "dev"})
     assert listing.status_code == 200
-    assert listing.json()["technicians"][0]["email"] == "tester@example.com"
+    assert any(item["email"] == "tester@example.com" for item in listing.json()["technicians"])
 
 def test_technician_pin_rejects_invalid():
     r = client.post("/api/v1/technicians/verify", json={"pin": "0000"}, headers={"x-smartbiz-token": "dev"})
