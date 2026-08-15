@@ -340,6 +340,14 @@ async def generate_document(request: Request) -> JSONResponse:
     return JSONResponse(doc)
 
 async def app_status(request: Request) -> JSONResponse:
+    checks = {}
+    try:
+        with lock, sqlite3.connect(DB_PATH) as con:
+            checks["db"] = con.execute("SELECT 1").fetchone()[0] == 1
+    except Exception:
+        checks["db"] = False
+    checks["xero"] = _xero_configured()
+    checks["smtp"] = all([os.environ.get("SMTP_HOST"), os.environ.get("SMTP_PORT"), os.environ.get("SMTP_USER"), os.environ.get("SMTP_PASS")])
     with lock, sqlite3.connect(DB_PATH) as con:
         jobs = con.execute("SELECT COUNT(*) AS count FROM jobs").fetchone()[0]
         leads = con.execute("SELECT COUNT(*) AS count FROM leads").fetchone()[0]
@@ -349,6 +357,7 @@ async def app_status(request: Request) -> JSONResponse:
     return JSONResponse({
         "service": "SmartBiz MVP",
         "status": "ok",
+        "checks": checks,
         "counts": {"jobs": jobs, "leads": leads, "approvals": approvals, "quiz_results": quiz, "bookings": bookings},
         "generated_at": _now_iso(),
     })

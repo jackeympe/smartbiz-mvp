@@ -52,6 +52,10 @@ def test_app_status():
     body = r.json()
     assert body["status"] == "ok"
     assert "counts" in body
+    assert "checks" in body
+    assert "db" in body["checks"]
+    assert "xero" in body["checks"]
+    assert "smtp" in body["checks"]
 
 def test_create_lead_persists_and_lists():
     payload = {
