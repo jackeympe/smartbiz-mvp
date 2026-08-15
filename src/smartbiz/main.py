@@ -41,10 +41,29 @@ QUIZ_QUESTIONS = [
 
 class SimpleTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
+        # Allow CORS preflight
+        if request.method == "OPTIONS":
+            return JSONResponse({}, status_code=204, headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, x-smartbiz-token",
+                "Access-Control-Max-Age": "86400",
+            })
         if request.url.path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads")):
             if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
                 return JSONResponse({"detail": "missing or invalid token"}, status_code=401)
         return await call_next(request)
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+        response.headers.setdefault("Access-Control-Allow-Origin", "*")
+        response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization, x-smartbiz-token")
+        return response
 
 def init_db() -> None:
     with lock, sqlite3.connect(DB_PATH) as con:
@@ -1033,8 +1052,12 @@ app = Starlette(
         Route("/xero/bookings/{booking_id}/creditnote", xero_refund_credit_note, methods=["POST"]),
         Route("/bookings/{booking_id}/pdf", pdf_booking_document, methods=["GET"]),
         Route("/bookings/{booking_id}/coc-pdf", coc_booking_document, methods=["GET"]),
+        Route("/xero/health", lambda request: JSONResponse({"ok": _xero_configured()}), methods=["GET"]),
     ],
-    middleware=[Middleware(SimpleTokenMiddleware)],
+    middleware=[
+        Middleware(SecurityHeadersMiddleware),
+        Middleware(SimpleTokenMiddleware),
+    ],
 )
 
 if __name__ == "__main__":

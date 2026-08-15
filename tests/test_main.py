@@ -205,6 +205,13 @@ def test_xero_not_configured():
         assert resp.status_code == 400
         assert "not configured" in resp.json()["detail"]
 
+def test_xero_health_reports_config():
+    r = client.get("/xero/health", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "ok" in body
+    assert isinstance(body["ok"], bool)
+
 def test_booking_pdf_document():
     r = client.post("/api/v1/bookings", json={"first_name":"PDF","last_name":"Doc","email":"pdf@example.com","amount_cents":2500}, headers={"x-smartbiz-token": "dev"})
     booking_id = r.json()["booking_id"]
