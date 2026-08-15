@@ -215,6 +215,13 @@ def health(request: Any) -> JSONResponse:
 def _json_error(detail: str, status_code: int = 400):
     return JSONResponse({"detail": detail}, status_code=status_code)
 
+def _payfast_hmac_valid(data: dict, signature: str, key: str) -> bool:
+    if not signature or not key:
+        return False
+    payload = "".join(f"{k}={urllib.parse.quote(str(v), safe='')}&" for k, v in sorted(data.items())).rstrip("&")
+    expected = hmac.new(key.encode(), payload.encode(), hashlib.md5).hexdigest()
+    return hmac.compare_digest(expected, signature.strip())
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -509,8 +516,8 @@ async def payfast_notify(request: Request) -> JSONResponse:
     pf_payment_id = data.get("pf_payment_id") or ""
     amount_gross = data.get("amount_gross") or "0"
     signature = data.get("signature") or ""
-    expected = hmac.new(os.environ.get("PAYFAST_MERCHANT_KEY", "").encode(), body, hashlib.md5).hexdigest()
-    if not hmac.compare_digest(expected, signature):
+    key = os.environ.get("PAYFAST_MERCHANT_KEY", "")
+    if not _payfast_hmac_valid(data, signature, key):
         return JSONResponse({"detail": "invalid signature"}, status_code=400)
     with lock, sqlite3.connect(DB_PATH) as con:
         con.execute(
@@ -693,6 +700,27 @@ async def update_booking(request: Request) -> JSONResponse:
         )
         con.commit()
     return JSONResponse({"ok": True, "updated": list(updates.keys())})
+
+async def export_all(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid token"}, status_code=401)
+    fmt = (request.query_params.get("format") or "json").strip().lower()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        leads = [dict(r) for r in con.execute("SELECT * FROM leads ORDER BY id DESC").fetchall()]
+        jobs = [dict(r) for r in con.execute("SELECT * FROM jobs ORDER BY id DESC").fetchall()]
+        bookings = [dict(r) for r in con.execute("SELECT * FROM bookings ORDER BY id DESC").fetchall()]
+        technicians = [dict(r) for r in con.execute("SELECT * FROM technicians ORDER BY id DESC").fetchall()]
+    if fmt == "csv":
+        lines = ["leads: id,first_name,last_name,email,phone,company,interest,created_at"]
+        for row in leads:
+            lines.append(",".join(str(row.get(k, "")) for k in ["id", "first_name", "last_name", "email", "phone", "company", "interest", "created_at"]))
+        lines.append("")
+        lines.append("bookings: id,first_name,last_name,email,service,status,amount_cents,currency,payfast_status,created_at")
+        for row in bookings:
+            lines.append(",".join(str(row.get(k, "")) for k in ["id", "first_name", "last_name", "email", "service", "status", "amount_cents", "currency", "payfast_status", "created_at"]))
+        return JSONResponse({"csv": "\n".join(lines)})
+    return JSONResponse({"leads": leads, "jobs": jobs, "bookings": bookings, "technicians": technicians})
 
 async def xero_webhook_receiver(request: Request) -> JSONResponse:
     body = await request.json() or {}
@@ -1095,6 +1123,7 @@ app = Starlette(
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
         Route("/bookings/{booking_id}/payfast-status", payfast_status_update, methods=["POST"]),
         Route("/api/v1/bookings/{booking_id}", update_booking, methods=["PATCH"]),
+        Route("/api/v1/export/all", export_all, methods=["GET"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),
         Route("/xero/webhook", xero_webhook_receiver, methods=["POST"]),
         Route("/api/v1/analytics/summary", analytics_summary, methods=["GET"]),
