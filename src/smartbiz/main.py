@@ -114,10 +114,15 @@ def init_db() -> None:
               currency TEXT NOT NULL DEFAULT 'ZAR',
               payfast_payment_id TEXT NOT NULL DEFAULT '',
               payfast_pf_payment_id TEXT NOT NULL DEFAULT '',
+              payfast_status TEXT NOT NULL DEFAULT 'pending',
+              payfast_updated_at TEXT NOT NULL DEFAULT '',
+              evidence_notes TEXT NOT NULL DEFAULT '',
+              evidence_photo_url TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL DEFAULT ''
             )
             """
         )
+        con.execute("PRAGMA user_version = 3")
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS technicians (
@@ -141,6 +146,24 @@ def init_db() -> None:
             )
             """
         )
+        con.commit()
+        # migrate bookings columns if missing
+        try:
+            con.execute("ALTER TABLE bookings ADD COLUMN payfast_status TEXT NOT NULL DEFAULT 'pending'")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE bookings ADD COLUMN payfast_updated_at TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE bookings ADD COLUMN evidence_notes TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE bookings ADD COLUMN evidence_photo_url TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
         con.commit()
 
 init_db()
@@ -460,7 +483,7 @@ async def payfast_notify(request: Request) -> JSONResponse:
 async def list_bookings(request: Any) -> JSONResponse:
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at FROM bookings ORDER BY id DESC").fetchall()
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, payfast_status, evidence_notes, evidence_photo_url, created_at FROM bookings ORDER BY id DESC").fetchall()
         data = [dict(r) for r in rows]
     return JSONResponse({"bookings": data})
 
@@ -468,7 +491,7 @@ async def get_public_booking(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        row = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        row = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, payfast_status, evidence_notes, evidence_photo_url, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
         if not row:
             return _json_error("booking not found", 404)
         booking = dict(row)
@@ -545,10 +568,14 @@ async def technician_complete(request: Request) -> JSONResponse:
     body = await request.json() or {}
     visited = bool(body.get("visited"))
     completed = bool(body.get("completed"))
+    evidence_notes = (body.get("evidence_notes") or "").strip()
+    evidence_photo_url = (body.get("evidence_photo_url") or "").strip()
     detail = ("visited" if visited else "") + (", completed" if completed else "")
     with lock, sqlite3.connect(DB_PATH) as con:
-        con.execute("SELECT id, status, amount_cents, payfast_payment_id FROM bookings WHERE id = ?", (booking_id,)).fetchone()
-        cur = con.execute("UPDATE bookings SET status='technician_completed' WHERE id=?", (booking_id,))
+        cur = con.execute(
+            "UPDATE bookings SET status='technician_completed', evidence_notes=?, evidence_photo_url=? WHERE id=?",
+            (evidence_notes, evidence_photo_url, booking_id),
+        )
         if cur.rowcount == 0:
             return _json_error("booking not found", 404)
         con.execute(
@@ -564,19 +591,66 @@ async def refund_booking(request: Request) -> JSONResponse:
     reason = (body.get("reason") or "").strip()
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        row = con.execute("SELECT id, status, amount_cents, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        row = con.execute("SELECT id, status, amount_cents, created_at, payfast_status FROM bookings WHERE id = ?", (booking_id,)).fetchone()
         if not row:
             return _json_error("booking not found", 404)
         created_at = datetime.fromisoformat(row["created_at"])
         if datetime.now(timezone.utc) - created_at < timedelta(days=5):
             return _json_error("refund window is 5 days after payment", 403)
-        con.execute("UPDATE bookings SET status='refunded' WHERE id=?", (booking_id,))
+        con.execute("UPDATE bookings SET status='refunded', payfast_status='refunded' WHERE id=?", (booking_id,))
         con.execute(
             "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'refund', ?, ?)",
             (booking_id, reason or "90% refund after technician no-show/failed job", _now_iso()),
         )
         con.commit()
     return JSONResponse({"ok": True, "status": "refunded"})
+
+async def payfast_status_update(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    body = await request.json() or {}
+    status = (body.get("status") or "").strip()
+    pf_payment_id = (body.get("pf_payment_id") or "").strip()
+    payment_id = (body.get("payment_id") or "").strip()
+    if not status:
+        return _json_error("status is required", 400)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute(
+            "UPDATE bookings SET payfast_status=?, payfast_pf_payment_id=?, payfast_payment_id=?, payfast_updated_at=? WHERE id=?",
+            (status, pf_payment_id, payment_id, _now_iso(), booking_id),
+        )
+        con.execute(
+            "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'payfast_update', ?, ?)",
+            (booking_id, f"payfast_status={status}", _now_iso()),
+        )
+        con.commit()
+    return JSONResponse({"ok": True, "booking_id": booking_id, "payfast_status": status})
+
+async def xero_webhook_receiver(request: Request) -> JSONResponse:
+    body = await request.json() or {}
+    event = (body.get("event_type") or "").strip().lower()
+    resource = body.get("resource") or {}
+    booking_id_raw = (resource.get("booking_id") or resource.get("reference") or "").strip()
+    if not event or not booking_id_raw:
+        return _json_error("missing event_type or booking_id/reference", 400)
+    try:
+        booking_id = int(booking_id_raw)
+    except Exception:
+        return _json_error("invalid booking_id", 400)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        if "invoice" in event and "paid" in event:
+            con.execute("UPDATE bookings SET status='paid', payfast_status='paid' WHERE id=?", (booking_id,))
+            con.execute(
+                "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'xero_paid', ?, ?)",
+                (booking_id, "Xero invoice paid", _now_iso()),
+            )
+        elif "creditnote" in event:
+            con.execute("UPDATE bookings SET status='refunded', payfast_status='refunded' WHERE id=?", (booking_id,))
+            con.execute(
+                "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'xero_refunded', ?, ?)",
+                (booking_id, "Xero credit note processed", _now_iso()),
+            )
+        con.commit()
+    return JSONResponse({"ok": True, "event": event, "booking_id": booking_id})
 
 async def analytics_summary(request: Request) -> JSONResponse:
     with lock, sqlite3.connect(DB_PATH) as con:
@@ -950,7 +1024,9 @@ app = Starlette(
         Route("/api/v1/technicians", list_technicians, methods=["GET"]),
         Route("/api/v1/technicians/{technician_id}", get_technician_profile, methods=["GET"]),
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
+        Route("/bookings/{booking_id}/payfast-status", payfast_status_update, methods=["POST"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),
+        Route("/xero/webhook", xero_webhook_receiver, methods=["POST"]),
         Route("/api/v1/analytics/summary", analytics_summary, methods=["GET"]),
         Route("/xero/bookings/{booking_id}/contact", xero_sync_contact, methods=["POST"]),
         Route("/xero/bookings/{booking_id}/invoice", xero_create_invoice, methods=["POST"]),

@@ -38,6 +38,8 @@
         <h1>Job Completion</h1>
         <p>Confirm you visited the site and completed the job.</p>
         <div id="tech-booking-info"></div>
+        <input id="tech-notes" placeholder="Evidence notes" class="full" />
+        <input id="tech-photo" placeholder="Evidence photo URL" class="full" />
         <button class="btn btn-primary" id="tech-complete-btn">Mark Job Complete</button>
         <div id="tech-msg" class="msg"></div>
       </div>
@@ -121,9 +123,11 @@
 
     document.getElementById('tech-complete-btn').addEventListener('click', async () => {
       try {
+        const notes = (document.getElementById('tech-notes').value || '').trim();
+        const photo = (document.getElementById('tech-photo').value || '').trim();
         const r = await request(`/technician/complete/${bookingId}?token=${encodeURIComponent(techToken)}`, {
           method: 'POST',
-          body: JSON.stringify({ visited: true, completed: true })
+          body: JSON.stringify({ visited: true, completed: true, evidence_notes: notes, evidence_photo_url: photo })
         });
         const data = await r.json();
         if (r.ok) {

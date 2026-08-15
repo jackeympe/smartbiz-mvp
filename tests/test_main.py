@@ -152,7 +152,7 @@ def test_booking_list_and_analytics():
     assert "bookings" in body
     assert "refunds" in body
 
-def test_technician_qr_and_complete():
+def test_technician_qr_and_complete_with_evidence():
     payload = {
         "first_name": "Tech",
         "last_name": "Client",
@@ -169,9 +169,13 @@ def test_technician_qr_and_complete():
     assert body["booking_id"] == booking_id
     assert body["qr_png_base64"]
 
-    complete = client.post(f"/technician/complete/{booking_id}?token=tech-complete-1234", json={"visited": True, "completed": True}, headers={"x-smartbiz-token": "dev"})
+    complete = client.post(f"/technician/complete/{booking_id}?token=tech-complete-1234", json={"visited": True, "completed": True, "evidence_notes": "extinguishers ok", "evidence_photo_url": "https://example.com/photo.jpg"}, headers={"x-smartbiz-token": "dev"})
     assert complete.status_code == 200
     assert complete.json()["status"] == "technician_completed"
+
+    booking = client.get(f"/api/v1/bookings/{booking_id}/public").json()
+    assert booking["evidence_notes"] == "extinguishers ok"
+    assert booking["evidence_photo_url"] == "https://example.com/photo.jpg"
 
 def test_refund_window_enforced():
     payload = {
@@ -243,3 +247,32 @@ def test_technician_pin_flow():
 def test_technician_pin_rejects_invalid():
     r = client.post("/api/v1/technicians/verify", json={"pin": "0000"}, headers={"x-smartbiz-token": "dev"})
     assert r.status_code == 403
+
+def test_payfast_status_update():
+    r = client.post("/api/v1/bookings", json={"first_name":"PF","last_name":"S","email":"pf@example.com","amount_cents":1500}, headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+    update = client.post(f"/bookings/{booking_id}/payfast-status", json={"status": "paid", "pf_payment_id": "pf-1", "payment_id": "pay-1"}, headers={"x-smartbiz-token": "dev"})
+    assert update.status_code == 200
+    assert update.json()["payfast_status"] == "paid"
+
+    booking = client.get(f"/api/v1/bookings/{booking_id}/public").json()
+    assert booking["payfast_status"] == "paid"
+
+def test_xero_webhook_updates_booking_status():
+    r = client.post("/api/v1/bookings", json={"first_name":"XW","last_name":"Test","email":"xw@example.com","amount_cents":2000}, headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+    paid = client.post("/xero/webhook", json={"event_type": "INVOICE.PAID", "resource": {"booking_id": str(booking_id)}})
+    assert paid.status_code == 200
+    assert paid.json()["event"] == "invoice.paid"
+    assert client.get(f"/api/v1/bookings/{booking_id}/public").json()["status"] == "paid"
+
+    refunded = client.post("/xero/webhook", json={"event_type": "CREDITNOTE.CREATED", "resource": {"booking_id": str(booking_id)}})
+    assert refunded.status_code == 200
+    assert client.get(f"/api/v1/bookings/{booking_id}/public").json()["status"] == "refunded"
+
+def test_technician_page_allows_evidence_input():
+    # Ensure technician.html exists and references evidence fields
+    with open("website/technician.html", "r", encoding="utf-8") as f:
+        html = f.read()
+    assert "evidence_notes" in html
+    assert "evidence_photo_url" in html
