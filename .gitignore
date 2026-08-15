@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+smartbiz.sqlite
+.venv
+dist
+build
+*.egg-info
+.env
+.idea
+.vscode
+Thumbs.db
+.DS_Store
