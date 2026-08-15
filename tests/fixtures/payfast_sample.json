@@ -1,0 +1,15 @@
+{
+  "notify": {
+    "m_payment_id": "pay-123",
+    "pf_payment_id": "pf-123",
+    "payment_status": "Complete",
+    "amount_gross": "5000.00",
+    "name": "Test User",
+    "email": "test@example.com"
+  },
+  "status_update": {
+    "status": "paid",
+    "pf_payment_id": "pf-123",
+    "payment_id": "pay-123"
+  }
+}

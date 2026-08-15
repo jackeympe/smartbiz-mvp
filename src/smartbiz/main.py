@@ -373,11 +373,12 @@ async def app_status(request: Request) -> JSONResponse:
         approvals = con.execute("SELECT COUNT(*) AS count FROM approvals").fetchone()[0]
         quiz = con.execute("SELECT COUNT(*) AS count FROM quiz_results").fetchone()[0]
         bookings = con.execute("SELECT COUNT(*) AS count FROM bookings").fetchone()[0]
+        technicians = con.execute("SELECT COUNT(*) AS count FROM technicians").fetchone()[0]
     return JSONResponse({
         "service": "SmartBiz MVP",
         "status": "ok",
         "checks": checks,
-        "counts": {"jobs": jobs, "leads": leads, "approvals": approvals, "quiz_results": quiz, "bookings": bookings},
+        "counts": {"jobs": jobs, "leads": leads, "approvals": approvals, "quiz_results": quiz, "bookings": bookings, "technicians": technicians},
         "generated_at": _now_iso(),
     })
 
@@ -672,6 +673,26 @@ async def payfast_status_update(request: Request) -> JSONResponse:
         )
         con.commit()
     return JSONResponse({"ok": True, "booking_id": booking_id, "payfast_status": status})
+
+async def update_booking(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid token"}, status_code=401)
+    booking_id = int(request.path_params["booking_id"])
+    body = await request.json() or {}
+    allowed = ["status", "payfast_status", "evidence_notes", "evidence_photo_url", "payfast_payment_id", "payfast_pf_payment_id"]
+    updates = {k: body[k] for k in allowed if k in body}
+    if not updates:
+        return _json_error("no valid fields to update")
+    columns = ", ".join([f"{k}=?" for k in updates])
+    values = list(updates.values()) + [_now_iso(), booking_id]
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute(f"UPDATE bookings SET {columns}, payfast_updated_at=? WHERE id=?", values)
+        con.execute(
+            "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'admin_update', ?, ?)",
+            (booking_id, f"updated fields: {', '.join(updates.keys())}", _now_iso()),
+        )
+        con.commit()
+    return JSONResponse({"ok": True, "updated": list(updates.keys())})
 
 async def xero_webhook_receiver(request: Request) -> JSONResponse:
     body = await request.json() or {}
@@ -1073,6 +1094,7 @@ app = Starlette(
         Route("/api/v1/technicians/{technician_id}", get_technician_profile, methods=["GET"]),
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
         Route("/bookings/{booking_id}/payfast-status", payfast_status_update, methods=["POST"]),
+        Route("/api/v1/bookings/{booking_id}", update_booking, methods=["PATCH"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),
         Route("/xero/webhook", xero_webhook_receiver, methods=["POST"]),
         Route("/api/v1/analytics/summary", analytics_summary, methods=["GET"]),

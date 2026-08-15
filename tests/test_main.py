@@ -320,3 +320,16 @@ def test_technician_page_allows_evidence_input():
         html = f.read()
     assert "evidence_notes" in html
     assert "evidence_photo_url" in html
+
+def test_admin_update_booking_fields():
+    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+    patch = client.patch(f"/api/v1/bookings/{booking_id}", json={"status": "paid", "evidence_notes": "site visit done"}, headers={"x-smartbiz-token": "dev"})
+    assert patch.status_code == 200
+    body = patch.json()
+    assert "updated" in body
+    assert "status" in body["updated"]
+
+    booking = client.get(f"/api/v1/bookings/{booking_id}/public").json()
+    assert booking["status"] == "paid"
+    assert booking["evidence_notes"] == "site visit done"
