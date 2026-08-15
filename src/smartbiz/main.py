@@ -644,10 +644,11 @@ async def refund_booking(request: Request) -> JSONResponse:
         created_at = datetime.fromisoformat(row["created_at"])
         if datetime.now(timezone.utc) - created_at < timedelta(days=5):
             return _json_error("refund window is 5 days after payment", 403)
+        refund_amount = int((row["amount_cents"] * 0.9) // 1)
         con.execute("UPDATE bookings SET status='refunded', payfast_status='refunded' WHERE id=?", (booking_id,))
         con.execute(
             "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'refund', ?, ?)",
-            (booking_id, reason or "90% refund after technician no-show/failed job", _now_iso()),
+            (booking_id, f"90% refund after technician no-show/failed job; refund_amount_cents={refund_amount}", _now_iso()),
         )
         con.commit()
     return JSONResponse({"ok": True, "status": "refunded"})

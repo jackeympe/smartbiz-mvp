@@ -1,7 +1,11 @@
 from fastapi.testclient import TestClient
-from smartbiz.main import app
+from smartbiz.main import app, DB_PATH
+import threading
+from datetime import datetime, timezone, timedelta
+import sqlite3
 
 client = TestClient(app)
+lock = threading.Lock()
 
 def test_health():
     r = client.get("/health")
@@ -195,6 +199,16 @@ def test_refund_window_enforced():
     refund = client.post(f"/bookings/{booking_id}/refund", json={"reason": "no-show"}, headers={"x-smartbiz-token": "dev"})
     assert refund.status_code == 403
     assert "refund window" in refund.json()["detail"]
+
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute("UPDATE bookings SET created_at=? WHERE id=?", ((datetime.now(timezone.utc) - timedelta(days=6)).isoformat(), booking_id))
+        con.commit()
+    refund2 = client.post(f"/bookings/{booking_id}/refund", json={"reason": "no-show"}, headers={"x-smartbiz-token": "dev"})
+    assert refund2.status_code == 200
+    assert refund2.json()["status"] == "refunded"
+    booking = client.get(f"/api/v1/bookings/{booking_id}/public").json()
+    assert booking["status"] == "refunded"
+    assert booking["payfast_status"] == "refunded"
 
 def test_xero_not_configured():
     r = client.post("/api/v1/bookings", json={"first_name":"X","last_name":"R","email":"x@r.com","amount_cents":1000}, headers={"x-smartbiz-token": "dev"})
