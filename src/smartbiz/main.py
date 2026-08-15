@@ -65,6 +65,25 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization, x-smartbiz-token")
         return response
 
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: Any, max_requests: int = 120, window_seconds: int = 60) -> None:
+        super().__init__(app)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._hits: dict[str, list[float]] = {}
+
+    async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
+        ip = request.client.host if request.client else "unknown"
+        key = ip + "|" + request.url.path
+        now = datetime.now(timezone.utc).timestamp()
+        hits = self._hits.get(key, [])
+        hits = [t for t in hits if now - t <= self.window_seconds]
+        if len(hits) >= self.max_requests:
+            return JSONResponse({"detail": "rate limit exceeded"}, status_code=429)
+        hits.append(now)
+        self._hits[key] = hits
+        return await call_next(request)
+
 def init_db() -> None:
     with lock, sqlite3.connect(DB_PATH) as con:
         con.execute(
@@ -1065,6 +1084,7 @@ app = Starlette(
     ],
     middleware=[
         Middleware(SecurityHeadersMiddleware),
+        Middleware(RateLimitMiddleware, max_requests=120, window_seconds=60),
         Middleware(SimpleTokenMiddleware),
     ],
 )
