@@ -56,6 +56,11 @@ Deploy `src/smartbiz/main.py` with `uvicorn smartbiz.main:app` to:
 - Mobile tech page: `website/technician.html`
 - Technician PIN auth: `/api/v1/technicians`, `/api/v1/technicians/verify`
 
+## Admin manual updates
+
+- `PATCH /api/v1/bookings/{booking_id}` updates `status`, `payfast_status`, `evidence_notes`, `evidence_photo_url`, `payfast_payment_id`, `payfast_pf_payment_id`
+- Admin UI: **Admin Update** button in bookings table opens quick prompts for status and evidence notes
+
 ## Xero hold/release
 
 - Endpoints: `/xero/bookings/{booking_id}/contact`, `/xero/bookings/{booking_id}/invoice`, `/xero/bookings/{booking_id}/creditnote`
