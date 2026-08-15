@@ -281,8 +281,38 @@ def test_xero_webhook_updates_booking_status():
     assert refunded.status_code == 200
     assert client.get(f"/api/v1/bookings/{booking_id}/public").json()["status"] == "refunded"
 
+def test_end_to_end_quiz_booking_completion_pdf():
+    answers = {f"q{i}": "Yes" for i in range(1, 11)}
+    quiz = client.post("/api/v1/quiz/submit", json={"first_name":"E2E","last_name":"Flow","email":"e2e@example.com","answers":answers})
+    assert quiz.status_code == 200
+
+    booking = client.post("/api/v1/bookings", json={"first_name":"E2E","last_name":"Flow","email":"e2e@example.com","service":"site-inspection","amount_cents":5000}, headers={"x-smartbiz-token": "dev"})
+    assert booking.status_code == 200
+    booking_id = booking.json()["booking_id"]
+
+    qr = client.get(f"/bookings/{booking_id}/qr", headers={"x-smartbiz-token": "dev"})
+    assert qr.status_code == 200
+
+    complete = client.post(f"/technician/complete/{booking_id}?token=tech-complete-1234", json={"visited": True, "completed": True, "evidence_notes": "ok", "evidence_photo_url": "https://example.com/photo.jpg"}, headers={"x-smartbiz-token": "dev"})
+    assert complete.status_code == 200
+    assert complete.json()["status"] == "technician_completed"
+
+    pdf = client.get(f"/bookings/{booking_id}/pdf", headers={"x-smartbiz-token": "dev"})
+    assert pdf.status_code == 200
+    body = pdf.json()
+    assert body["booking_id"] == booking_id
+    assert "pdf_base64" in body
+
+    coc = client.get(f"/bookings/{booking_id}/coc-pdf", headers={"x-smartbiz-token": "dev"})
+    assert coc.status_code == 200
+    body = coc.json()
+    assert body["booking_id"] == booking_id
+    assert "pdf_base64" in body
+
+    refund = client.post(f"/bookings/{booking_id}/refund", json={"reason": "no-show"}, headers={"x-smartbiz-token": "dev"})
+    assert refund.status_code == 403
+
 def test_technician_page_allows_evidence_input():
-    # Ensure technician.html exists and references evidence fields
     with open("website/technician.html", "r", encoding="utf-8") as f:
         html = f.read()
     assert "evidence_notes" in html
