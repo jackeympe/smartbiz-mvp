@@ -464,6 +464,16 @@ async def list_bookings(request: Any) -> JSONResponse:
         data = [dict(r) for r in rows]
     return JSONResponse({"bookings": data})
 
+async def get_public_booking(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        if not row:
+            return _json_error("booking not found", 404)
+        booking = dict(row)
+    return JSONResponse(booking)
+
 async def get_technician_qr(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
     complete_token = os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234")
@@ -477,6 +487,53 @@ async def get_technician_qr(request: Request) -> JSONResponse:
     except Exception as e:
         return _json_error("qr generation failed: " + str(e), 500)
     return JSONResponse({"booking_id": booking_id, "qr_png_base64": encoded, "complete_url": qr_url})
+
+async def create_technician(request: Request) -> JSONResponse:
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    email = (body.get("email") or "").strip()
+    pin = (body.get("pin") or "").strip()
+    if not name or not email or not pin:
+        return _json_error("name, email, and pin are required")
+    created_at = _now_iso()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        cur = con.execute(
+            "INSERT INTO technicians (name, email, pin, active, created_at) VALUES (?, ?, ?, 1, ?)",
+            (name, email, pin, created_at),
+        )
+        technician_id = cur.lastrowid
+        con.commit()
+    return JSONResponse({"ok": True, "technician_id": technician_id})
+
+async def verify_technician_pin(request: Request) -> JSONResponse:
+    body = await request.json()
+    pin = (body.get("pin") or "").strip()
+    if not pin:
+        return _json_error("pin is required", 400)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, name, email, active FROM technicians WHERE pin = ? AND active = 1", (pin,)).fetchone()
+        if not row:
+            return _json_error("invalid or inactive pin", 403)
+        technician = dict(row)
+    return JSONResponse({"ok": True, "technician": technician})
+
+async def get_technician_profile(request: Request) -> JSONResponse:
+    technician_id = int(request.path_params["technician_id"])
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, name, email, active, created_at FROM technicians WHERE id = ?", (technician_id,)).fetchone()
+        if not row:
+            return _json_error("technician not found", 404)
+        technician = dict(row)
+    return JSONResponse(technician)
+
+async def list_technicians(request: Request) -> JSONResponse:
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("SELECT id, name, email, active, created_at FROM technicians ORDER BY id DESC").fetchall()
+        data = [dict(r) for r in rows]
+    return JSONResponse({"technicians": data})
 
 async def technician_complete(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
@@ -744,6 +801,128 @@ async def pdf_booking_document(request: Request) -> JSONResponse:
     pdf = buf.getvalue()
     return JSONResponse({"booking_id": booking_id, "pdf_base64": base64.b64encode(pdf).decode("ascii"), "filename": f"booking-{booking_id}.pdf"})
 
+
+def _build_coc_pdf(booking_id: int, booking: dict) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+
+    issue_date = datetime.now(timezone.utc)
+    expiry_date = issue_date + timedelta(days=365)
+
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        events = con.execute(
+            "SELECT event_type, detail, created_at FROM job_events WHERE job_id = ? ORDER BY id ASC",
+            (booking_id,),
+        ).fetchall()
+        events = [dict(e) for e in events]
+        quiz_score_row = con.execute(
+            "SELECT score FROM quiz_results WHERE email = ? ORDER BY id DESC LIMIT 1",
+            (booking.get("email", ""),),
+        ).fetchone()
+        compliance_score = quiz_score_row["score"] if quiz_score_row else None
+
+    tech_status = booking.get("status", "pending")
+    tech_completed = tech_status == "technician_completed"
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=20*mm, rightMargin=20*mm, topMargin=20*mm, bottomMargin=20*mm)
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Certificate of Compliance", styles["Title"]))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(f"Booking Reference: {booking['id']}", styles["Normal"]))
+    story.append(Spacer(1, 14))
+
+    story.append(Paragraph("Client Information", styles["Heading2"]))
+    data = [
+        ["Name", f"{booking['first_name']} {booking['last_name']}"],
+        ["Email", booking["email"]],
+        ["Phone", booking["phone"]],
+        ["Company", booking["company"]],
+        ["Service", booking["service"]],
+    ]
+    table = Table(data, colWidths=[40*mm, 120*mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#111827")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,0), 10),
+        ("BOTTOMPADDING", (0,0), (-1,0), 8),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+        ("BACKGROUND", (0,1), (-1,-1), colors.HexColor("#f9fafb")),
+        ("FONTSIZE", (0,1), (-1,-1), 9),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 14))
+
+    story.append(Paragraph("Compliance Details", styles["Heading2"]))
+    data = [
+        ["Issue Date", issue_date.strftime("%Y-%m-%d")],
+        ["Expiry Date", expiry_date.strftime("%Y-%m-%d")],
+        ["Technician Status", "Completed" if tech_completed else tech_status],
+    ]
+    if compliance_score is not None:
+        data.append(["Compliance Score", f"{compliance_score}/10"])
+    table = Table(data, colWidths=[50*mm, 110*mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#111827")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,0), 10),
+        ("BOTTOMPADDING", (0,0), (-1,0), 8),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+        ("BACKGROUND", (0,1), (-1,-1), colors.HexColor("#f9fafb")),
+        ("FONTSIZE", (0,1), (-1,-1), 9),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 20))
+
+    story.append(Paragraph("Declaration", styles["Heading2"]))
+    story.append(Paragraph(
+        "This certificate confirms that the fire safety inspection and associated compliance "
+        "checks have been recorded for the client and site details listed above. "
+        "The technician has marked this booking as completed.",
+        styles["Normal"],
+    ))
+    story.append(Spacer(1, 24))
+
+    story.append(Paragraph("Authorised Signature", styles["Heading2"]))
+    story.append(Spacer(1, 30))
+    story.append(Paragraph("_" * 40, styles["Normal"]))
+    story.append(Paragraph("SmartBiz Fire Safety — Authorised Signatory", styles["Normal"]))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(f"Date: {issue_date.strftime('%Y-%m-%d')}", styles["Normal"]))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
+async def coc_booking_document(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        booking = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        if not booking:
+            return _json_error("booking not found", 404)
+        booking = dict(booking)
+    try:
+        pdf = _build_coc_pdf(booking_id, booking)
+    except Exception as e:
+        return _json_error("coc pdf generation failed: " + str(e), 500)
+    return JSONResponse({
+        "booking_id": booking_id,
+        "pdf_base64": base64.b64encode(pdf).decode("ascii"),
+        "filename": f"coc-booking-{booking_id}.pdf",
+    })
+
+
 app = Starlette(
     routes=[
         Route("/", homepage),
@@ -763,8 +942,13 @@ app = Starlette(
         Route("/quiz/export", export_quiz, methods=["GET"]),
         Route("/api/v1/bookings", create_booking, methods=["POST"]),
         Route("/api/v1/bookings", list_bookings, methods=["GET"]),
+        Route("/api/v1/bookings/{booking_id}/public", get_public_booking, methods=["GET"]),
         Route("/bookings/{booking_id}/qr", get_technician_qr, methods=["GET"]),
         Route("/technician/complete/{booking_id}", technician_complete, methods=["POST"]),
+        Route("/api/v1/technicians", create_technician, methods=["POST"]),
+        Route("/api/v1/technicians/verify", verify_technician_pin, methods=["POST"]),
+        Route("/api/v1/technicians", list_technicians, methods=["GET"]),
+        Route("/api/v1/technicians/{technician_id}", get_technician_profile, methods=["GET"]),
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),
         Route("/api/v1/analytics/summary", analytics_summary, methods=["GET"]),
@@ -772,6 +956,7 @@ app = Starlette(
         Route("/xero/bookings/{booking_id}/invoice", xero_create_invoice, methods=["POST"]),
         Route("/xero/bookings/{booking_id}/creditnote", xero_refund_credit_note, methods=["POST"]),
         Route("/bookings/{booking_id}/pdf", pdf_booking_document, methods=["GET"]),
+        Route("/bookings/{booking_id}/coc-pdf", coc_booking_document, methods=["GET"]),
     ],
     middleware=[Middleware(SimpleTokenMiddleware)],
 )

@@ -20,15 +20,15 @@
     .err { color: var(--error); }
     .muted { color: var(--muted); }
     .hidden { display: none; }
-    input[type="password"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,36,0.6); color: var(--text); }
+    input[type="password"], input[type="text"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,36,0.6); color: var(--text); margin-top: 8px; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <section id="tech-login" class="card">
       <h1>Technician Access</h1>
-      <p>Enter the technician token to continue.</p>
-      <input id="tech-token" type="password" placeholder="Technician token" />
+      <p>Enter your technician PIN to continue.</p>
+      <input id="tech-pin" type="password" placeholder="PIN" autocomplete="one-time-code" />
       <button class="btn btn-primary" id="tech-login-btn">Continue</button>
       <div id="tech-login-msg" class="msg"></div>
     </section>
@@ -74,11 +74,18 @@
     }
 
     document.getElementById('tech-login-btn').addEventListener('click', async () => {
-      techToken = (document.getElementById('tech-token').value || '').trim();
-      if (!techToken) {
-        setMsg('tech-login-msg', 'Enter a token.', 'err');
+      const pin = (document.getElementById('tech-pin').value || '').trim();
+      if (!pin) {
+        setMsg('tech-login-msg', 'Enter a PIN.', 'err');
         return;
       }
+      const verify = await request('/api/v1/technicians/verify', { method: 'POST', body: JSON.stringify({ pin }) });
+      const verifyData = await verify.json();
+      if (!verify.ok) {
+        setMsg('tech-login-msg', verifyData.detail || 'Invalid PIN.', 'err');
+        return;
+      }
+      techToken = pin;
       const params = new URLSearchParams(window.location.search);
       bookingId = params.get('booking_id') || '';
       if (!bookingId) {

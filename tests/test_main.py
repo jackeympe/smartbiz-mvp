@@ -210,3 +210,36 @@ def test_booking_pdf_document():
     assert body["booking_id"] == booking_id
     assert "pdf_base64" in body
     assert "booking-" in body["filename"]
+
+def test_booking_coc_pdf_document():
+    r = client.post("/api/v1/bookings", json={"first_name":"COC","last_name":"Doc","email":"coc@example.com","amount_cents":3000}, headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+    client.post(f"/technician/complete/{booking_id}?token=tech-complete-1234", json={"visited": True, "completed": True}, headers={"x-smartbiz-token": "dev"})
+    client.post("/api/v1/quiz/submit", json={"first_name":"COC","last_name":"Doc","email":"coc@example.com","answers":{"q1":"Yes"}})
+    pdf = client.get(f"/bookings/{booking_id}/coc-pdf", headers={"x-smartbiz-token": "dev"})
+    assert pdf.status_code == 200
+    body = pdf.json()
+    assert body["booking_id"] == booking_id
+    assert "pdf_base64" in body
+    assert "coc-booking-" in body["filename"]
+
+def test_technician_pin_flow():
+    created = client.post("/api/v1/technicians", json={"name": "Tester", "email": "tester@example.com", "pin": "4321"}, headers={"x-smartbiz-token": "dev"})
+    assert created.status_code == 200
+    assert created.json()["technician_id"] == 1
+
+    verified = client.post("/api/v1/technicians/verify", json={"pin": "4321"}, headers={"x-smartbiz-token": "dev"})
+    assert verified.status_code == 200
+    assert verified.json()["technician"]["name"] == "Tester"
+
+    profile = client.get("/api/v1/technicians/1", headers={"x-smartbiz-token": "dev"})
+    assert profile.status_code == 200
+    assert profile.json()["name"] == "Tester"
+
+    listing = client.get("/api/v1/technicians", headers={"x-smartbiz-token": "dev"})
+    assert listing.status_code == 200
+    assert listing.json()["technicians"][0]["email"] == "tester@example.com"
+
+def test_technician_pin_rejects_invalid():
+    r = client.post("/api/v1/technicians/verify", json={"pin": "0000"}, headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 403
