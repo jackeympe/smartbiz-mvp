@@ -450,6 +450,10 @@ async def payfast_notify(request: Request) -> JSONResponse:
             (int(payment_id), "PayFast payment confirmed: " + str(amount_gross), _now_iso()),
         )
         con.commit()
+    try:
+        await _xero_create_invoice_for_booking(int(payment_id))
+    except Exception:
+        pass
     return JSONResponse({"ok": True})
 
 async def list_bookings(request: Any) -> JSONResponse:
@@ -595,6 +599,9 @@ async def xero_sync_contact(request: Request) -> JSONResponse:
 
 async def xero_create_invoice(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
+    return await _xero_create_invoice_for_booking(booking_id)
+
+async def _xero_create_invoice_for_booking(booking_id: int) -> JSONResponse:
     if not _xero_configured():
         return _json_error("Xero is not configured", 400)
     with lock, sqlite3.connect(DB_PATH) as con:
