@@ -20,6 +20,7 @@ import base64
 import urllib.error
 import urllib.parse
 import urllib.request
+from io import BytesIO
 
 DB_PATH = "smartbiz.sqlite"
 lock = threading.Lock()
@@ -690,6 +691,59 @@ async def xero_refund_credit_note(request: Request) -> JSONResponse:
         con.commit()
     return JSONResponse({"ok": True, "credit_note": body.get("CreditNotes", [None])[0]})
 
+async def pdf_booking_document(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        booking = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+        if not booking:
+            return _json_error("booking not found", 404)
+        booking = dict(booking)
+        events = con.execute("SELECT event_type, detail, created_at FROM job_events WHERE job_id = ? ORDER BY id ASC", (booking_id,)).fetchall()
+        events = [dict(e) for e in events]
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+    except Exception as e:
+        return _json_error("pdf generation unavailable: " + str(e), 500)
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, leftMargin=18*mm, rightMargin=18*mm, topMargin=18*mm, bottomMargin=18*mm)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph("SmartBiz Fire Safety — Booking Document", styles["Title"]))
+    story.append(Spacer(1, 8))
+    story.append(Paragraph(f"Booking #: {booking['id']}", styles["Normal"]))
+    story.append(Paragraph(f"Client: {booking['first_name']} {booking['last_name']}", styles["Normal"]))
+    story.append(Paragraph(f"Email: {booking['email']}", styles["Normal"]))
+    story.append(Paragraph(f"Phone: {booking['phone']}", styles["Normal"]))
+    story.append(Paragraph(f"Company: {booking['company']}", styles["Normal"]))
+    story.append(Paragraph(f"Service: {booking['service']}", styles["Normal"]))
+    story.append(Paragraph(f"Amount: {booking['currency']} {booking['amount_cents']/100:.2f}", styles["Normal"]))
+    story.append(Paragraph(f"Status: {booking['status']}", styles["Normal"]))
+    story.append(Paragraph(f"Created: {booking['created_at']}", styles["Normal"]))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Events", styles["Heading2"]))
+    data = [["Time", "Event", "Detail"]] + [[e["created_at"], e["event_type"], e["detail"]] for e in events]
+    table = Table(data, colWidths=[90*mm, 50*mm, 60*mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f97316")),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.whitesmoke),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,0), 10),
+        ("BOTTOMPADDING", (0,0), (-1,0), 8),
+        ("BACKGROUND", (0,1), (-1,-1), colors.HexColor("#fff7ed")),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("FONTSIZE", (0,1), (-1,-1), 9),
+    ]))
+    story.append(table)
+    doc.build(story)
+    pdf = buf.getvalue()
+    return JSONResponse({"booking_id": booking_id, "pdf_base64": base64.b64encode(pdf).decode("ascii"), "filename": f"booking-{booking_id}.pdf"})
+
 app = Starlette(
     routes=[
         Route("/", homepage),
@@ -717,6 +771,7 @@ app = Starlette(
         Route("/xero/bookings/{booking_id}/contact", xero_sync_contact, methods=["POST"]),
         Route("/xero/bookings/{booking_id}/invoice", xero_create_invoice, methods=["POST"]),
         Route("/xero/bookings/{booking_id}/creditnote", xero_refund_credit_note, methods=["POST"]),
+        Route("/bookings/{booking_id}/pdf", pdf_booking_document, methods=["GET"]),
     ],
     middleware=[Middleware(SimpleTokenMiddleware)],
 )

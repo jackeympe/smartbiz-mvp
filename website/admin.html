@@ -229,7 +229,7 @@
         (data.bookings || []).forEach(b => {
           const tr = document.createElement('tr');
           tr.innerHTML = `<td>${b.id}</td><td>${b.first_name} ${b.last_name}</td><td>${b.service}</td><td>${(b.amount_cents||0)/100} ${b.currency}</td><td><span class="badge">${b.status}</span></td>` +
-            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="xero-contact" data-id="${b.id}">Xero Contact</button> <button class="btn" data-action="xero-invoice" data-id="${b.id}">Xero Invoice</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button></td>`;
+            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="pdf" data-id="${b.id}">PDF</button> <button class="btn" data-action="xero-contact" data-id="${b.id}">Xero Contact</button> <button class="btn" data-action="xero-invoice" data-id="${b.id}">Xero Invoice</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button></td>`;
           tbody.appendChild(tr);
         });
         setMsg('bookings-msg', data.bookings?.length ? `Loaded ${data.bookings.length} bookings` : 'No bookings yet.');
@@ -313,6 +313,23 @@
           setMsg('bookings-msg', 'Xero invoice created.', 'ok');
         } else {
           setMsg('bookings-msg', data.detail || 'Xero invoice failed.', 'err');
+        }
+      } else if (action === 'pdf') {
+        const r = await request('/bookings/' + id + '/pdf');
+        const data = await r.json();
+        if (r.ok && data.pdf_base64) {
+          const blob = new Blob([Uint8Array.from(atob(data.pdf_base64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = data.filename || ('booking-' + id + '.pdf');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          setMsg('bookings-msg', 'PDF downloaded.', 'ok');
+        } else {
+          setMsg('bookings-msg', data.detail || 'PDF failed.', 'err');
         }
       }
     }

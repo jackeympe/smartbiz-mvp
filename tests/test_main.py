@@ -200,3 +200,13 @@ def test_xero_not_configured():
         resp = client.post(path, headers={"x-smartbiz-token": "dev"})
         assert resp.status_code == 400
         assert "not configured" in resp.json()["detail"]
+
+def test_booking_pdf_document():
+    r = client.post("/api/v1/bookings", json={"first_name":"PDF","last_name":"Doc","email":"pdf@example.com","amount_cents":2500}, headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+    pdf = client.get(f"/bookings/{booking_id}/pdf", headers={"x-smartbiz-token": "dev"})
+    assert pdf.status_code == 200
+    body = pdf.json()
+    assert body["booking_id"] == booking_id
+    assert "pdf_base64" in body
+    assert "booking-" in body["filename"]
