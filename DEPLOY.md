@@ -33,6 +33,7 @@ XERO_TENANT_ID=your-xero-tenant-id
 
 - Root `/`
 - Publish dir `website`
+- Project type: **Static assets**
 - Environment variables: `SMARBIZ_API_URL`, `SMARBIZ_ADMIN_TOKEN`
 
 ## API hosting
@@ -45,16 +46,32 @@ Deploy `src/smartbiz/main.py` with `uvicorn smartbiz.main:app` to:
 - Use PayFast sandbox for testing
 - Set `PAYFAST_MERCHANT_ID` and `PAYFAST_MERCHANT_KEY`
 - Notify URL: `https://your-api.example.com/payfast/notify`
+- Status update: `POST /bookings/{booking_id}/payfast-status`
 
 ## Technician QR flow
 
 - QR endpoint: `GET /bookings/{booking_id}/qr`
 - Technician complete: `POST /technician/complete/{booking_id}?token={token}`
 - If technician no-shows/fails, refund after 5 days via `POST /bookings/{booking_id}/refund`
+- Mobile tech page: `website/technician.html`
+- Technician PIN auth: `/api/v1/technicians`, `/api/v1/technicians/verify`
 
 ## Xero hold/release
 
-- This MVP tracks payments in SQLite.
-- For real Xero hold/release, integrate the Xero API to create bills/credits.
-- Recommended: webhook from PayFast notify -> Xero contact/credit-note creation.
-- Refund logic: after 5 days from `created_at`, admin can trigger `POST /bookings/{booking_id}/refund`.
+- Endpoints: `/xero/bookings/{booking_id}/contact`, `/xero/bookings/{booking_id}/invoice`, `/xero/bookings/{booking_id}/creditnote`
+- Webhook: `POST /xero/webhook`
+- Health: `GET /xero/health`
+- Refund logic: after 5 days from `created_at`, admin can trigger `POST /bookings/{booking_id}/refund`
+- Refund amount: **90%** of booking amount
+
+## Readiness
+
+- `/health` returns `{"status": "ok"}`
+- `/api/v1/status` returns counts and readiness checks
+- `/xero/health` returns `{"ok": true/false}`
+
+## Monitoring
+
+- Watch API logs for 4xx/5xx spikes
+- Monitor booking completion and refund events
+- Check PayFast IPN success/failure
