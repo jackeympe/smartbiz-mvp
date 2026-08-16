@@ -137,6 +137,7 @@
         <section class="card">
           <h2>Bookings & Payments</h2>
           <div class="row">
+            <input id="booking-search" placeholder="Search bookings..." class="full" />
             <button class="btn" onclick="loadBookings()">Refresh</button>
             <button class="btn" onclick="loadAnalytics()">Analytics</button>
           </div>
@@ -187,6 +188,10 @@
         loadJobs();
         loadLeads();
         loadBookings();
+      }
+      const searchInput = document.getElementById('booking-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => loadBookings());
       }
     }
 
@@ -268,19 +273,24 @@
     }
 
     async function loadBookings() {
-      setMsg('bookings-msg', 'Loading...');
+      const msg = document.getElementById('bookings-msg');
+      const search = (document.getElementById('booking-search').value || '').trim().toLowerCase();
       try {
         const r = await request('/api/v1/bookings');
         const data = await r.json();
         const tbody = document.getElementById('bookings-table');
         tbody.innerHTML = '';
-        (data.bookings || []).forEach(b => {
+        const rows = (data.bookings || []).filter(b => {
+          if (!search) return true;
+          return [b.first_name, b.last_name, b.email, b.service, b.status].some(v => (v || '').toLowerCase().includes(search));
+        });
+        rows.forEach(b => {
           const tr = document.createElement('tr');
           tr.innerHTML = `<td>${b.id}</td><td>${b.first_name} ${b.last_name}</td><td>${b.service}</td><td>${(b.amount_cents||0)/100} ${b.currency}</td><td><span class="badge">${b.status}</span></td>` +
             `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="pdf" data-id="${b.id}">PDF</button> <button class="btn" data-action="xero-contact" data-id="${b.id}">Xero Contact</button> <button class="btn" data-action="xero-invoice" data-id="${b.id}">Xero Invoice</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button> <button class="btn" data-action="admin-update" data-id="${b.id}">Admin Update</button></td>`;
           tbody.appendChild(tr);
         });
-        setMsg('bookings-msg', data.bookings?.length ? `Loaded ${data.bookings.length} bookings` : 'No bookings yet.');
+        setMsg('bookings-msg', rows.length ? `Loaded ${rows.length} bookings` : 'No bookings match your search.');
       } catch (e) {
         setMsg('bookings-msg', 'Failed to load bookings.', 'err');
       }
