@@ -71,6 +71,7 @@
           <div class="pill" id="admin-token-pill">Offline ready</div>
           <button class="btn" onclick="exportLeads()">Export Leads</button>
           <button class="btn" onclick="exportQuiz()">Export Quiz</button>
+          <button class="btn" onclick="exportAll()">Export All</button>
           <button class="btn" onclick="loadAnalytics()">Analytics</button>
           <button class="btn" id="admin-logout">Logout</button>
         </div>
@@ -155,7 +156,8 @@
   </div>
 
   <script>
-    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) || 'http://localhost:8000';
+    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) ? SMARBIZ_API_URL.replace(/\\/$/, '') : 'http://localhost:8000';
+    const IS_PROD = API_BASE !== 'http://localhost:8000';
     let ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
 
     function setMsg(id, text, kind='') {
@@ -204,6 +206,28 @@
       ADMIN_TOKEN = '';
       showAdmin(false);
     });
+
+    async function checkApiStatus() {
+      const msg = document.getElementById('api-status-msg');
+      try {
+        const r = await fetch(API_BASE + '/health');
+        const data = await r.json();
+        if (r.ok) {
+          msg.textContent = 'API status: ' + (data.status || 'ok') + (IS_PROD ? ' (prod)' : ' (local)');
+          msg.className = 'msg ok';
+        } else {
+          msg.textContent = 'API status check failed.';
+          msg.className = 'msg err';
+        }
+      } catch (e) {
+        msg.textContent = 'API unreachable from this page.';
+        msg.className = 'msg err';
+      }
+    }
+
+    if (IS_PROD) {
+      checkApiStatus();
+    }
 
     async function loadJobs() {
       setMsg('jobs-msg', 'Loading...');
@@ -443,6 +467,29 @@
         if (r.ok && data.csv) {
           downloadBlob('quiz_results.csv', data.csv, 'text/csv');
           setMsg('jobs-msg', 'Quiz exported.', 'ok');
+        } else {
+          setMsg('jobs-msg', 'Export failed.', 'err');
+        }
+      } catch (e) {
+        setMsg('jobs-msg', 'Export failed.', 'err');
+      }
+    }
+
+    async function exportAll() {
+      try {
+        const r = await request('/api/v1/export/all?format=json');
+        const data = await r.json();
+        if (r.ok) {
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'smartbiz-export.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          setMsg('jobs-msg', 'Full export downloaded.', 'ok');
         } else {
           setMsg('jobs-msg', 'Export failed.', 'err');
         }

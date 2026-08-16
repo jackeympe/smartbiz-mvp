@@ -49,9 +49,16 @@ class SimpleTokenMiddleware(BaseHTTPMiddleware):
                 "Access-Control-Allow-Headers": "Content-Type, Authorization, x-smartbiz-token",
                 "Access-Control-Max-Age": "86400",
             })
-        if request.url.path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads")):
+        path = request.url.path
+        # Admin-only paths
+        if path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads", "/api/v1/export")):
             if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
-                return JSONResponse({"detail": "missing or invalid token"}, status_code=401)
+                return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+        # Technician-only paths
+        if path.startswith(("/technician/complete", "/bookings/")) and request.method in ("POST", "PATCH"):
+            tech_token = request.headers.get("x-smartbiz-token") or request.query_params.get("token")
+            if tech_token not in [ADMIN_TOKEN, os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234")]:
+                return JSONResponse({"detail": "missing or invalid technician token"}, status_code=401)
         return await call_next(request)
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -265,10 +272,46 @@ def _send_email(subject: str, body: str, to_addr: str | None = None) -> None:
     msg["Subject"] = subject
     msg["From"] = user
     msg["To"] = to_addr
-    with smtplib.SMTP(host, port, timeout=20) as s:
-        s.starttls()
-        s.login(user, password)
-        s.send_message(msg)
+    try:
+        with smtplib.SMTP(host, port, timeout=20) as s:
+            s.starttls()
+            s.login(user, password)
+            s.send_message(msg)
+    except Exception:
+        pass
+
+def _booking_email_subject(event: str, booking_id: int) -> str:
+    return f"SmartBiz booking #{booking_id}: {event}"
+
+def _booking_confirmed_email(booking_id: int, booking: dict) -> str:
+    return f"""Hi {booking.get('first_name', '')},
+
+Your fire compliance booking #{booking_id} is confirmed.
+Service: {booking.get('service', '')}
+Amount: {booking.get('amount_cents', 0) / 100} {booking.get('currency', 'ZAR')}
+
+Next: complete payment via PayFast.
+"""
+
+def _technician_completed_email(booking_id: int, booking: dict) -> str:
+    return f"""Hi {booking.get('first_name', '')},
+
+Booking #{booking_id} has been marked complete by our technician.
+Service: {booking.get('service', '')}
+Status: technician completed
+
+You will receive your compliance documents shortly.
+"""
+
+def _refund_confirmed_email(booking_id: int, booking: dict, refund_cents: int) -> str:
+    return f"""Hi {booking.get('first_name', '')},
+
+Your refund for booking #{booking_id} has been processed.
+Refund amount: {refund_cents / 100} {booking.get('currency', 'ZAR')}
+Refund reason: no-show/failed job after 5 days
+
+If you have questions, reply to this email.
+"""
 
 def _record_job_event(job_id: int, event_type: str, detail: str = "") -> None:
     with lock, sqlite3.connect(DB_PATH) as con:
@@ -526,13 +569,17 @@ async def create_booking(request: Request) -> JSONResponse:
         )
         booking_id = cur.lastrowid
         con.commit()
-    try:
-        _send_email("New booking: " + first + " " + last, "Booking\nName: " + first + " " + last + "\nEmail: " + email + "\nService: " + service + "\nAmount: " + str(amount_cents) + " cents\nBooking ID: " + str(booking_id))
-    except Exception:
-        pass
     payfast_url = ""
     try:
         payfast_url = _build_payfast_url(first, last, email, amount_cents, service, booking_id)
+    except Exception:
+        pass
+    try:
+        _send_email(
+            _booking_email_subject("confirmed", booking_id),
+            _booking_confirmed_email(booking_id, {"first_name": first, "service": service, "amount_cents": amount_cents, "currency": currency}),
+            email,
+        )
     except Exception:
         pass
     return JSONResponse({"ok": True, "booking_id": booking_id, "payfast_url": payfast_url})
@@ -644,10 +691,14 @@ async def list_technicians(request: Request) -> JSONResponse:
 async def technician_complete(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
     token = (request.query_params.get("token") or "").strip()
-    if token != os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234"):
-        return _json_error("invalid technician token", 403)
-    if not request.headers.get("x-smartbiz-token") == ADMIN_TOKEN:
-        return _json_error("admin token required", 401)
+    header_token = (request.headers.get("x-smartbiz-token") or "").strip()
+    tech_token = os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234")
+    if header_token == ADMIN_TOKEN:
+        pass
+    elif token == tech_token or header_token == tech_token:
+        pass
+    else:
+        return _json_error("invalid technician token or missing admin token", 401)
     body = await request.json() or {}
     visited = bool(body.get("visited"))
     completed = bool(body.get("completed"))
@@ -666,6 +717,17 @@ async def technician_complete(request: Request) -> JSONResponse:
             (booking_id, detail or "complete", _now_iso()),
         )
         con.commit()
+    try:
+        row = con.execute("SELECT first_name, email, service, amount_cents, currency FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        if row:
+            booking = dict(zip(["first_name", "email", "service", "amount_cents", "currency"], row))
+            _send_email(
+                _booking_email_subject("technician completed", booking_id),
+                _technician_completed_email(booking_id, booking),
+                booking.get("email"),
+            )
+    except Exception:
+        pass
     return JSONResponse({"ok": True, "status": "technician_completed"})
 
 async def refund_booking(request: Request) -> JSONResponse:
@@ -687,6 +749,17 @@ async def refund_booking(request: Request) -> JSONResponse:
             (booking_id, f"90% refund after technician no-show/failed job; refund_amount_cents={refund_amount}", _now_iso()),
         )
         con.commit()
+    try:
+        row = con.execute("SELECT first_name, email, service, amount_cents, currency FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        if row:
+            booking = dict(zip(["first_name", "email", "service", "amount_cents", "currency"], row))
+            _send_email(
+                _booking_email_subject("refund processed", booking_id),
+                _refund_confirmed_email(booking_id, booking, refund_amount),
+                booking.get("email"),
+            )
+    except Exception:
+        pass
     return JSONResponse({"ok": True, "status": "refunded"})
 
 async def payfast_status_update(request: Request) -> JSONResponse:
@@ -707,7 +780,7 @@ async def payfast_status_update(request: Request) -> JSONResponse:
             (booking_id, f"payfast_status={status}", _now_iso()),
         )
         con.commit()
-    return JSONResponse({"ok": True, "booking_id": booking_id, "payfast_status": status})
+    return JSONResponse({"ok": True, "booking_id": booking_id, "status": status})
 
 async def update_booking(request: Request) -> JSONResponse:
     if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:

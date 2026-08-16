@@ -267,7 +267,7 @@ def test_payfast_status_update():
     booking_id = r.json()["booking_id"]
     update = client.post(f"/bookings/{booking_id}/payfast-status", json={"status": "paid", "pf_payment_id": "pf-1", "payment_id": "pay-1"}, headers={"x-smartbiz-token": "dev"})
     assert update.status_code == 200
-    assert update.json()["payfast_status"] == "paid"
+    assert update.json()["status"] == "paid"
 
     booking = client.get(f"/api/v1/bookings/{booking_id}/public").json()
     assert booking["payfast_status"] == "paid"
@@ -348,3 +348,32 @@ def test_request_logging_middleware_records_hits():
     with lock, sqlite3.connect(DB_PATH) as con:
         count = con.execute("SELECT COUNT(*) FROM request_logs WHERE path='/health'").fetchone()[0]
     assert count >= 2
+
+def test_role_based_access_blocks_technician_on_admin_paths():
+    tech_token = os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234")
+    r = client.get("/jobs", headers={"x-smartbiz-token": tech_token})
+    assert r.status_code == 401
+    assert "admin" in r.json()["detail"].lower()
+
+def test_technician_token_allows_completion_but_not_admin():
+    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
+    booking_id = r.json()["booking_id"]
+    tech_token = os.environ.get("SMARBIZ_TECHNICIAN_TOKEN", "tech-complete-1234")
+    complete = client.post(f"/technician/complete/{booking_id}?token={tech_token}", json={"visited": True, "completed": True}, headers={"x-smartbiz-token": tech_token})
+    assert complete.status_code == 200
+    assert complete.json()["status"] == "technician_completed"
+
+def test_email_templates_do_not_raise():
+    from smartbiz.main import _booking_confirmed_email, _technician_completed_email, _refund_confirmed_email
+    assert "fire compliance booking" in _booking_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
+    assert "technician" in _technician_completed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
+    assert "refund" in _refund_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"}, 900)
+
+def test_admin_export_all_json():
+    client.post("/api/v1/leads", json=FIXTURES["lead"])
+    r = client.get("/api/v1/export/all?format=json", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "leads" in body
+    assert "bookings" in body
+    assert "technicians" in body
