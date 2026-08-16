@@ -34,7 +34,14 @@ XERO_TENANT_ID=your-xero-tenant-id
 - Root `/`
 - Publish dir `website`
 - Project type: **Static assets**
-- Environment variables: `SMARBIZ_API_URL`, `SMARBIZ_ADMIN_TOKEN`
+- Environment variables:
+  - `SMARBIZ_API_URL` = `https://<your-api-domain>`
+  - `SMARBIZ_ADMIN_TOKEN` = your admin token
+
+After deploy, verify:
+- Open Pages site
+- Open browser console: should show API status in prod mode
+- Admin login should load data from API
 
 ## API hosting
 

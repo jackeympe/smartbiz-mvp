@@ -1004,6 +1004,22 @@ async def xero_create_invoice(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
     return await _xero_create_invoice_for_booking(booking_id)
 
+async def smtp_test_endpoint(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    host = os.environ.get("SMTP_HOST")
+    port = os.environ.get("SMTP_PORT")
+    user = os.environ.get("SMTP_USER")
+    password = os.environ.get("SMTP_PASS")
+    to_addr = os.environ.get("SMARBIZ_EMAIL_TO") or user
+    if not all([host, port, user, password, to_addr]):
+        return JSONResponse({"ok": False, "detail": "SMTP is not configured"}, status_code=400)
+    try:
+        _send_email("SmartBiz SMTP test", "This is a test message from SmartBiz.", to_addr)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+
 async def _xero_create_invoice_for_booking(booking_id: int) -> JSONResponse:
     if not _xero_configured():
         return _json_error("Xero is not configured", 400)
@@ -1309,6 +1325,7 @@ app = Starlette(
         Route("/bookings/{booking_id}/pdf", pdf_booking_document, methods=["GET"]),
         Route("/bookings/{booking_id}/coc-pdf", coc_booking_document, methods=["GET"]),
         Route("/xero/health", lambda request: JSONResponse({"ok": _xero_configured()}), methods=["GET"]),
+        Route("/api/v1/smtp-test", smtp_test_endpoint, methods=["POST"]),
     ],
     middleware=[
         Middleware(SecurityHeadersMiddleware),

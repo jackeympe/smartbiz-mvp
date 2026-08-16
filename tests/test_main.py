@@ -416,3 +416,14 @@ def test_smtp_template_does_not_raise():
     assert _booking_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
     assert _technician_completed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
     assert _refund_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"}, 900)
+
+def test_smtp_test_endpoint_requires_admin_token():
+    r = client.post("/api/v1/smtp-test")
+    assert r.status_code == 401
+    r = client.post("/api/v1/smtp-test", headers={"x-smartbiz-token": "dev"})
+    if os.environ.get("SMTP_HOST") and os.environ.get("SMTP_PORT") and os.environ.get("SMTP_USER") and os.environ.get("SMTP_PASS") and os.environ.get("SMARBIZ_EMAIL_TO"):
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+    else:
+        assert r.status_code == 400
+        assert r.json()["ok"] is False

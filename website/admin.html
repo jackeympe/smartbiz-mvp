@@ -167,8 +167,10 @@
   </div>
 
   <script>
-    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) ? SMARBIZ_API_URL.replace(/\\/$/, '') : 'http://localhost:8000';
-    const IS_PROD = API_BASE !== 'http://localhost:8000';
+    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) ? SMARBIZ_API_URL.replace(/\\/$/, '') : '';
+    const IS_PROD = API_BASE !== '';
+    const FALLBACK_LOCAL = 'http://localhost:8000';
+    const EFFECTIVE_API_BASE = IS_PROD ? API_BASE : FALLBACK_LOCAL;
     let ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
 
     function setMsg(id, text, kind='') {
@@ -185,7 +187,10 @@
         ...(options.headers || {})
       };
       const init = { ...options, headers };
-      const r = await fetch(API_BASE + path, init);
+      const r = await fetch(EFFECTIVE_API_BASE + path, init);
+      if (!r.ok && IS_PROD) {
+        console.warn('Prod API call failed, status=', r.status, 'for', path);
+      }
       return r;
     }
 
