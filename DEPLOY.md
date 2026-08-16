@@ -39,6 +39,7 @@ XERO_TENANT_ID=your-xero-tenant-id
 - Environment variables:
   - `SMARBIZ_API_URL` = `https://<your-api-domain>`
   - `SMARBIZ_ADMIN_TOKEN` = your admin token
+- GitHub Actions: `.github/workflows/ci.yml` runs tests, then deploys this folder to Pages on main
 
 After deploy, verify:
 - Open Pages site

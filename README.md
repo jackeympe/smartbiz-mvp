@@ -3,7 +3,7 @@
 Local-first fire compliance platform: quiz lead funnel, bookings, PayFast payments, technician QR completion, PDF/COC docs, Xero sync, and admin dashboard.
 
 ## Stack
-- Python + Starlette + SQLite
+- Python + FastAPI + SQLite
 - Cloudflare Pages static site
 - PayFast for payments
 - Xero for invoicing/credit notes
@@ -46,6 +46,13 @@ PYTHONPATH='' .venv/Scripts/python.exe -m pytest tests/ -v
 - `GET /xero/health`
 - `GET /bookings/{id}/pdf`
 - `GET /bookings/{id}/coc-pdf`
+- `POST /api/v1/smtp-test`
 
 ## Deploy
 See `DEPLOY.md` and `DEPLOY-PRODUCTION.md`.
+
+## Release notes: 1.2.3
+- Refined Cloudflare Pages static deploy config
+- Added GitHub Actions workflow for tests + Pages deployment
+- Improved admin dashboard prod-mode handling with status pill
+- Hardened API docs and endpoint coverage

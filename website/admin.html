@@ -172,6 +172,7 @@
     const FALLBACK_LOCAL = 'http://localhost:8000';
     const EFFECTIVE_API_BASE = IS_PROD ? API_BASE : FALLBACK_LOCAL;
     let ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
+    let ADMIN_ENABLED = IS_PROD;
 
     function setMsg(id, text, kind='') {
       const el = document.getElementById(id);
@@ -180,7 +181,22 @@
       el.className = 'msg ' + kind;
     }
 
+    function setStatusPill() {
+      const pill = document.getElementById('admin-token-pill');
+      if (!pill) return;
+      if (ADMIN_ENABLED) {
+        pill.textContent = 'Prod ready';
+        pill.className = 'pill ok';
+      } else {
+        pill.textContent = 'Offline ready';
+        pill.className = 'pill';
+      }
+    }
+
     async function request(path, options = {}) {
+      if (!ADMIN_ENABLED) {
+        return Promise.reject(new Error('Admin API is not configured'));
+      }
       const headers = {
         'Content-Type': 'application/json',
         'x-smartbiz-token': ADMIN_TOKEN,
@@ -229,8 +245,14 @@
 
     async function checkApiStatus() {
       const msg = document.getElementById('api-status-msg');
+      if (!ADMIN_ENABLED) {
+        msg.textContent = 'Admin API is not configured.';
+        msg.className = 'msg err';
+        setStatusPill();
+        return;
+      }
       try {
-        const r = await fetch(API_BASE + '/health');
+        const r = await fetch(EFFECTIVE_API_BASE + '/health');
         const data = await r.json();
         if (r.ok) {
           msg.textContent = 'API status: ' + (data.status || 'ok') + (IS_PROD ? ' (prod)' : ' (local)');
@@ -243,10 +265,13 @@
         msg.textContent = 'API unreachable from this page.';
         msg.className = 'msg err';
       }
+      setStatusPill();
     }
 
     if (IS_PROD) {
       checkApiStatus();
+    } else {
+      setStatusPill();
     }
 
     async function loadJobs() {
