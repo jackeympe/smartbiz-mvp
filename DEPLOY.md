@@ -31,8 +31,10 @@ XERO_TENANT_ID=your-xero-tenant-id
 
 ## Cloudflare Pages
 
-- Root `/`
-- Publish dir `website`
+- Account/repo: connect GitHub repo `jackeympe/smartbiz-mvp`
+- Root directory: `/`
+- Build command: leave blank or `echo static-frontend`
+- Build output directory: `website`
 - Project type: **Static assets**
 - Environment variables:
   - `SMARBIZ_API_URL` = `https://<your-api-domain>`
