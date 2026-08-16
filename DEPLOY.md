@@ -80,3 +80,25 @@ Deploy `src/smartbiz/main.py` with `uvicorn smartbiz.main:app` to:
 - Watch API logs for 4xx/5xx spikes
 - Monitor booking completion and refund events
 - Check PayFast IPN success/failure
+
+## Render
+
+Use `render.yaml` in this repo. Set these env vars in Render dashboard:
+- `SMARTBIZ_ADMIN_TOKEN`
+- `SMARBIZ_TECHNICIAN_TOKEN`
+- `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMARTBIZ_EMAIL_TO`
+- `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`, `XERO_TENANT_ID`
+- `SMARBIZ_API_URL` = `https://<your-render-service>.onrender.com`
+
+## Fly.io
+
+```bash
+fly launch
+fly secrets set SMARTBIZ_ADMIN_TOKEN=... SMARBIZ_TECHNICIAN_TOKEN=...
+fly deploy
+```
+
+## Railway
+
+Push to GitHub and connect repo in Railway. Set env vars in Railway dashboard.

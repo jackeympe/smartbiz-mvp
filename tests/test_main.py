@@ -377,3 +377,42 @@ def test_admin_export_all_json():
     assert "leads" in body
     assert "bookings" in body
     assert "technicians" in body
+
+def test_booking_search_filter_pagination():
+    client.post("/api/v1/bookings", json={**FIXTURES["booking"], "first_name": "Alice", "service": "inspection"}, headers={"x-smartbiz-token": "dev"})
+    client.post("/api/v1/bookings", json={**FIXTURES["booking"], "first_name": "Bob", "service": "maintenance"}, headers={"x-smartbiz-token": "dev"})
+    r = client.get("/api/v1/bookings?q=Alice&service=inspection&page=1&limit=10", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] >= 1
+    assert body["page"] == 1
+    assert body["limit"] == 10
+    assert any(b["first_name"] == "Alice" for b in body["bookings"])
+
+def test_technician_assignment():
+    r = client.post("/api/v1/technicians", json={"name": "Tech One", "email": "tech@example.com", "pin": "1234"}, headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    tech_id = r.json()["technician_id"]
+    booking = client.post("/api/v1/bookings", json={**FIXTURES["booking"], "assigned_technician_id": tech_id}, headers={"x-smartbiz-token": "dev"}).json()
+    booking_id = booking["booking_id"]
+    assert booking["assigned_technician_id"] == tech_id
+    assigned = client.post(f"/api/v1/bookings/{booking_id}/assign", json={"technician_id": tech_id}, headers={"x-smartbiz-token": "dev"})
+    assert assigned.status_code == 200
+    assert assigned.json()["assigned_technician_id"] == tech_id
+
+def test_booking_history():
+    booking = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"}).json()
+    booking_id = booking["booking_id"]
+    client.post(f"/technician/complete/{booking_id}?token={os.environ.get('SMARBIZ_TECHNICIAN_TOKEN', 'tech-complete-1234')}", json={"visited": True, "completed": True})
+    r = client.get(f"/api/v1/bookings/{booking_id}/history", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["booking_id"] == booking_id
+    assert len(body["events"]) >= 1
+    assert any(e["event_type"] == "technician_complete" for e in body["events"])
+
+def test_smtp_template_does_not_raise():
+    from smartbiz.main import _send_email, _booking_confirmed_email, _technician_completed_email, _refund_confirmed_email
+    assert _booking_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
+    assert _technician_completed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
+    assert _refund_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"}, 900)

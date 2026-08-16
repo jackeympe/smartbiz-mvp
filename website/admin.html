@@ -151,6 +151,16 @@
             </table>
           </div>
           <div id="analytics-msg" class="msg" style="margin-top:12px;"></div>
+          <div id="booking-history" class="hidden" style="margin-top:16px;">
+            <h3>Booking History</h3>
+            <div id="booking-history-msg" class="msg"></div>
+            <table>
+              <thead>
+                <tr><th>Event</th><th>Detail</th><th>Time</th></tr>
+              </thead>
+              <tbody id="booking-history-table"></tbody>
+            </table>
+          </div>
         </section>
       </div>
     </section>
@@ -287,12 +297,35 @@
         rows.forEach(b => {
           const tr = document.createElement('tr');
           tr.innerHTML = `<td>${b.id}</td><td>${b.first_name} ${b.last_name}</td><td>${b.service}</td><td>${(b.amount_cents||0)/100} ${b.currency}</td><td><span class="badge">${b.status}</span></td>` +
-            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="pdf" data-id="${b.id}">PDF</button> <button class="btn" data-action="xero-contact" data-id="${b.id}">Xero Contact</button> <button class="btn" data-action="xero-invoice" data-id="${b.id}">Xero Invoice</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button> <button class="btn" data-action="admin-update" data-id="${b.id}">Admin Update</button></td>`;
+            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="pdf" data-id="${b.id}">PDF</button> <button class="btn" data-action="xero-contact" data-id="${b.id}">Xero Contact</button> <button class="btn" data-action="xero-invoice" data-id="${b.id}">Xero Invoice</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button> <button class="btn" data-action="admin-update" data-id="${b.id}">Admin Update</button> <button class="btn" data-action="history" data-id="${b.id}">History</button></td>`;
           tbody.appendChild(tr);
         });
         setMsg('bookings-msg', rows.length ? `Loaded ${rows.length} bookings` : 'No bookings match your search.');
       } catch (e) {
         setMsg('bookings-msg', 'Failed to load bookings.', 'err');
+      }
+    }
+
+    async function loadBookingHistory(booking_id) {
+      const container = document.getElementById('booking-history');
+      const msg = document.getElementById('booking-history-msg');
+      const tbody = document.getElementById('booking-history-table');
+      tbody.innerHTML = '';
+      try {
+        const r = await request(`/api/v1/bookings/${booking_id}/history`);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Failed');
+        msg.textContent = `History for booking #${booking_id}`;
+        msg.className = 'msg ok';
+        container.classList.remove('hidden');
+        (data.events || []).forEach(ev => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${ev.event_type}</td><td>${ev.detail}</td><td>${ev.created_at}</td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        msg.textContent = 'Failed to load booking history.';
+        msg.className = 'msg err';
       }
     }
 

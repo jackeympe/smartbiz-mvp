@@ -179,6 +179,7 @@ def init_db() -> None:
               payfast_updated_at TEXT NOT NULL DEFAULT '',
               evidence_notes TEXT NOT NULL DEFAULT '',
               evidence_photo_url TEXT NOT NULL DEFAULT '',
+              assigned_technician_id INTEGER NOT NULL DEFAULT 0,
               created_at TEXT NOT NULL DEFAULT ''
             )
             """
@@ -235,6 +236,10 @@ def init_db() -> None:
             pass
         try:
             con.execute("ALTER TABLE bookings ADD COLUMN evidence_photo_url TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE bookings ADD COLUMN assigned_technician_id INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass
         con.commit()
@@ -559,13 +564,14 @@ async def create_booking(request: Request) -> JSONResponse:
     service = (body.get("service") or "site-inspection").strip()
     amount_cents = int(body.get("amount_cents") or 0)
     currency = (body.get("currency") or "ZAR").strip()
+    assigned_technician_id = int(body.get("assigned_technician_id") or 0)
     if not first or not last or not email:
         return _json_error("first_name, last_name and email are required")
     created_at = _now_iso()
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute(
-            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
-            (first, last, email, phone, company, service, amount_cents, currency, created_at),
+            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, assigned_technician_id, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
+            (first, last, email, phone, company, service, amount_cents, currency, assigned_technician_id, created_at),
         )
         booking_id = cur.lastrowid
         con.commit()
@@ -582,7 +588,7 @@ async def create_booking(request: Request) -> JSONResponse:
         )
     except Exception:
         pass
-    return JSONResponse({"ok": True, "booking_id": booking_id, "payfast_url": payfast_url})
+    return JSONResponse({"ok": True, "booking_id": booking_id, "payfast_url": payfast_url, "assigned_technician_id": assigned_technician_id})
 
 async def payfast_notify(request: Request) -> JSONResponse:
     body = await request.body()
@@ -611,11 +617,42 @@ async def payfast_notify(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True})
 
 async def list_bookings(request: Any) -> JSONResponse:
+    query = request.query_params.get("q") or ""
+    status = (request.query_params.get("status") or "").strip()
+    service = (request.query_params.get("service") or "").strip()
+    try:
+        page = max(1, int(request.query_params.get("page") or "1"))
+    except Exception:
+        page = 1
+    try:
+        limit = max(1, min(100, int(request.query_params.get("limit") or "20")))
+    except Exception:
+        limit = 20
+    offset = (page - 1) * limit
+    where = ["1=1"]
+    params = []
+    if status:
+        where.append("status = ?")
+        params.append(status)
+    if service:
+        where.append("service = ?")
+        params.append(service)
+    if query:
+        like = f"%{query}%"
+        where.append("(first_name LIKE ? OR last_name LIKE ? OR email LIKE ? OR service LIKE ?)")
+        params.extend([like, like, like, like])
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, payfast_status, evidence_notes, evidence_photo_url, created_at FROM bookings ORDER BY id DESC").fetchall()
+        rows = con.execute(
+            f"SELECT id, first_name, last_name, email, phone, company, service, status, amount_cents, currency, payfast_status, evidence_notes, evidence_photo_url, created_at FROM bookings WHERE {' AND '.join(where)} ORDER BY id DESC LIMIT ? OFFSET ?",
+            (*params, limit, offset),
+        ).fetchall()
+        total = con.execute(
+            f"SELECT COUNT(*) AS count FROM bookings WHERE {' AND '.join(where)}",
+            params,
+        ).fetchone()[0]
         data = [dict(r) for r in rows]
-    return JSONResponse({"bookings": data})
+    return JSONResponse({"bookings": data, "total": total, "page": page, "limit": limit})
 
 async def get_public_booking(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
@@ -687,6 +724,38 @@ async def list_technicians(request: Request) -> JSONResponse:
         rows = con.execute("SELECT id, name, email, active, created_at FROM technicians ORDER BY id DESC").fetchall()
         data = [dict(r) for r in rows]
     return JSONResponse({"technicians": data})
+
+async def assign_technician(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    booking_id = int(request.path_params["booking_id"])
+    body = await request.json() or {}
+    technician_id = int(body.get("technician_id") or 0)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute("UPDATE bookings SET assigned_technician_id=? WHERE id=?", (technician_id, booking_id))
+        con.execute(
+            "INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'assigned', ?, ?)",
+            (booking_id, f"assigned_technician_id={technician_id}", _now_iso()),
+        )
+        con.commit()
+    return JSONResponse({"ok": True, "booking_id": booking_id, "assigned_technician_id": technician_id})
+
+async def booking_history(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, status, assigned_technician_id, created_at FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        events = con.execute("SELECT event_type, detail, created_at FROM job_events WHERE job_id=? ORDER BY id DESC", (booking_id,)).fetchall()
+    if not row:
+        return _json_error("booking not found", 404)
+    booking = dict(row)
+    return JSONResponse({
+        "booking_id": booking_id,
+        "status": booking["status"],
+        "assigned_technician_id": booking["assigned_technician_id"],
+        "created_at": booking["created_at"],
+        "events": [dict(e) for e in events],
+    })
 
 async def technician_complete(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
@@ -1228,6 +1297,8 @@ app = Starlette(
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
         Route("/bookings/{booking_id}/payfast-status", payfast_status_update, methods=["POST"]),
         Route("/api/v1/bookings/{booking_id}", update_booking, methods=["PATCH"]),
+        Route("/api/v1/bookings/{booking_id}/assign", assign_technician, methods=["POST"]),
+        Route("/api/v1/bookings/{booking_id}/history", booking_history, methods=["GET"]),
         Route("/api/v1/export/all", export_all, methods=["GET"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),
         Route("/xero/webhook", xero_webhook_receiver, methods=["POST"]),
