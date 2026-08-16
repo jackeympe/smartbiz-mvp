@@ -31,11 +31,11 @@ XERO_TENANT_ID=your-xero-tenant-id
 
 ## Cloudflare Pages
 
-- Account/repo: connect GitHub repo `jackeympe/smartbiz-mvp`
-- Root directory: `/`
-- Build command: leave blank or `echo static-frontend`
-- Build output directory: `website`
+- Repo: connect GitHub repo `jackeympe/smartbiz-mvp`
 - Project type: **Static assets**
+- Root directory: `/`
+- Build command: leave blank
+- Build output directory: `website`
 - Environment variables:
   - `SMARBIZ_API_URL` = `https://<your-api-domain>`
   - `SMARBIZ_ADMIN_TOKEN` = your admin token
