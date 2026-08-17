@@ -443,6 +443,36 @@ def test_lead_to_appointment_creates_booking():
     bookings = client.get("/api/v1/bookings", headers={"x-smartbiz-token": "dev"}).json()["bookings"]
     assert any(b["id"] == body["booking_id"] for b in bookings)
 
+def test_confirm_booking_changes_pending_to_confirmed():
+    booking = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"}).json()
+    booking_id = booking["booking_id"]
+    public = client.get(f"/api/v1/bookings/{booking_id}/public").json()
+    assert public["status"] == "pending"
+
+    r = client.post(f"/api/v1/bookings/{booking_id}/confirm")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "confirmed"
+    assert body["booking_id"] == booking_id
+
+    public2 = client.get(f"/api/v1/bookings/{booking_id}/public").json()
+    assert public2["status"] == "confirmed"
+
+def test_confirm_booking_is_idempotent():
+    booking = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"}).json()
+    booking_id = booking["booking_id"]
+
+    r1 = client.post(f"/api/v1/bookings/{booking_id}/confirm")
+    assert r1.status_code == 200
+
+    r2 = client.post(f"/api/v1/bookings/{booking_id}/confirm")
+    assert r2.status_code == 200
+    assert r2.json()["status"] == "confirmed"
+
+def test_confirm_booking_404_for_missing():
+    r = client.post("/api/v1/bookings/99999/confirm")
+    assert r.status_code == 404
+
 def test_smtp_test_endpoint_requires_admin_token():
     r = client.post("/api/v1/smtp-test")
     assert r.status_code == 401

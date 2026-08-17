@@ -500,10 +500,37 @@ async def lead_to_appointment(request: Request) -> JSONResponse:
         con.execute("INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'appointment', ?, ?)", (booking_id, f"lead_id={lead_id}", _now_iso()))
         con.commit()
     try:
-        _send_email("Appointment booked", f"Appointment created for {lead['first_name']} {lead['last_name']}.\nEmail: {lead['email']}\nPhone: {lead['phone']}\nService: {lead['interest']}", lead["email"])
+        from smartbiz.leads import outreach_email
+        content = outreach_email(lead, template="appointment_confirm")
+        _send_email("Appointment booked", content, lead["email"])
     except Exception:
         pass
     return JSONResponse({"ok": True, "booking_id": booking_id, "lead_id": lead_id})
+
+async def confirm_booking(request: Request) -> JSONResponse:
+    booking_id = int(request.path_params["booking_id"])
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        if not row:
+            return _json_error("booking not found", 404)
+        booking = dict(row)
+        if booking["status"] == "confirmed":
+            return JSONResponse({"ok": True, "booking_id": booking_id, "status": "confirmed"})
+        if booking["status"] != "pending":
+            return _json_error(f"booking cannot be confirmed from status '{booking['status']}'", 400)
+        con.execute("UPDATE bookings SET status='confirmed' WHERE id=?", (booking_id,))
+        con.execute("INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'confirmed', ?, ?)", (booking_id, "Client confirmed appointment", _now_iso()))
+        con.commit()
+    try:
+        _send_email(
+            _booking_email_subject("confirmed", booking_id),
+            f"Hi {booking.get('first_name', '')},\n\nYour fire compliance booking #{booking_id} is confirmed.\nService: {booking.get('service', '')}\n\nWe'll be in touch with timing and technician details shortly.\n\nBest,\nSmartBiz",
+            booking.get("email"),
+        )
+    except Exception:
+        pass
+    return JSONResponse({"ok": True, "booking_id": booking_id, "status": "confirmed"})
 
 async def create_lead(request: Any) -> JSONResponse:
     body = await request.json()
@@ -1411,6 +1438,7 @@ app = Starlette(
         Route("/api/v1/bookings", create_booking, methods=["POST"]),
         Route("/api/v1/bookings", list_bookings, methods=["GET"]),
         Route("/api/v1/bookings/{booking_id}/public", get_public_booking, methods=["GET"]),
+        Route("/api/v1/bookings/{booking_id}/confirm", confirm_booking, methods=["POST"]),
         Route("/bookings/{booking_id}/qr", get_technician_qr, methods=["GET"]),
         Route("/technician/complete/{booking_id}", technician_complete, methods=["POST"]),
         Route("/api/v1/technicians", create_technician, methods=["POST"]),
