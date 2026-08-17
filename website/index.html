@@ -178,6 +178,7 @@
         service: data.quiz_service || data.interest || 'site-inspection',
         amount_cents: data.interest === 'equipment-supply' ? 15000 : 5000,
         currency: 'ZAR',
+        source: 'website',
       };
       try {
         const r = await request('/api/v1/bookings', {

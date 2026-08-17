@@ -412,10 +412,36 @@ def test_booking_history():
     assert any(e["event_type"] == "technician_complete" for e in body["events"])
 
 def test_smtp_template_does_not_raise():
-    from smartbiz.main import _send_email, _booking_confirmed_email, _technician_completed_email, _refund_confirmed_email
+    from smartbiz.main import _booking_confirmed_email, _technician_completed_email, _refund_confirmed_email
     assert _booking_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
     assert _technician_completed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"})
     assert _refund_confirmed_email(1, {"first_name": "A", "service": "B", "amount_cents": 1000, "currency": "ZAR"}, 900)
+
+def test_lead_source_and_score():
+    r = client.post("/api/v1/leads", json={**FIXTURES["lead"], "source": "referral", "score": 7}, headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["source"] == "referral"
+    assert body["score"] == 7
+    assert body["status"] == "new"
+
+def test_update_lead_fields():
+    lead = client.post("/api/v1/leads", json=FIXTURES["lead"], headers={"x-smartbiz-token": "dev"}).json()
+    lead_id = lead["lead_id"]
+    patch = client.patch(f"/api/v1/leads/{lead_id}", json={"status": "contacted", "score": 8}, headers={"x-smartbiz-token": "dev"})
+    assert patch.status_code == 200
+    assert patch.json()["updated"] == ["status", "score"]
+
+def test_lead_to_appointment_creates_booking():
+    lead = client.post("/api/v1/leads", json={**FIXTURES["lead"], "interest": "site-inspection"}, headers={"x-smartbiz-token": "dev"}).json()
+    lead_id = lead["lead_id"]
+    r = client.post(f"/api/v1/leads/{lead_id}/appointment", headers={"x-smartbiz-token": "dev"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["booking_id"] > 0
+    assert body["lead_id"] == lead_id
+    bookings = client.get("/api/v1/bookings", headers={"x-smartbiz-token": "dev"}).json()["bookings"]
+    assert any(b["id"] == body["booking_id"] for b in bookings)
 
 def test_smtp_test_endpoint_requires_admin_token():
     r = client.post("/api/v1/smtp-test")

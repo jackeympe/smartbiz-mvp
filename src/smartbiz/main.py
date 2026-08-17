@@ -116,10 +116,14 @@ def init_db() -> None:
               first_name TEXT NOT NULL,
               last_name TEXT NOT NULL,
               email TEXT NOT NULL,
-              phone TEXT NOT NULL DEFAULT '',
-              company TEXT NOT NULL DEFAULT '',
-              interest TEXT NOT NULL DEFAULT 'demo',
-              created_at TEXT NOT NULL DEFAULT ''
+              phone TEXT,
+              company TEXT,
+              interest TEXT,
+              status TEXT NOT NULL DEFAULT 'new',
+              source TEXT DEFAULT 'organic',
+              score INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL,
+              updated_at TEXT NOT NULL
             )
             """
         )
@@ -235,7 +239,23 @@ def init_db() -> None:
         except Exception:
             pass
         try:
-            con.execute("ALTER TABLE bookings ADD COLUMN evidence_photo_url TEXT NOT NULL DEFAULT ''")
+            con.execute("ALTER TABLE leads ADD COLUMN status TEXT NOT NULL DEFAULT 'new'")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE leads ADD COLUMN source TEXT DEFAULT 'organic'")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE leads ADD COLUMN score INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE leads ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+        try:
+            con.execute("UPDATE leads SET updated_at = created_at WHERE updated_at = ''")
         except Exception:
             pass
         try:
@@ -394,12 +414,52 @@ async def reject_job(request: Request) -> JSONResponse:
     _record_job_event(job_id, "rejected", note or "Job rejected")
     return JSONResponse({"ok": True, "status": "rejected"})
 
-async def list_leads(request: Any) -> JSONResponse:
+async def list_leads(request: Request) -> JSONResponse:
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, created_at FROM leads ORDER BY id DESC").fetchall()
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status, source, score, created_at FROM leads ORDER BY id DESC").fetchall()
         data = [dict(r) for r in rows]
     return JSONResponse({"leads": data})
+
+async def update_lead(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    lead_id = int(request.path_params["lead_id"])
+    body = await request.json() or {}
+    allowed = {"status", "source", "score", "interest", "phone", "company"}
+    updates = {k: body[k] for k in body if k in allowed}
+    if not updates:
+        return _json_error("no valid update fields")
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    values = list(updates.values()) + [_now_iso(), lead_id]
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.execute(f"UPDATE leads SET {set_clause}, updated_at=? WHERE id=?", values)
+        con.commit()
+    return JSONResponse({"ok": True, "updated": list(updates.keys())})
+
+async def lead_to_appointment(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    lead_id = int(request.path_params["lead_id"])
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status FROM leads WHERE id=?", (lead_id,)).fetchone()
+        if not row:
+            return _json_error("lead not found", 404)
+        lead = dict(row)
+        cur = con.execute(
+            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
+            (lead["first_name"], lead["last_name"], lead["email"], lead["phone"], lead["company"], lead["interest"] or "site-inspection", 0, "ZAR", _now_iso()),
+        )
+        booking_id = cur.lastrowid
+        con.execute("UPDATE leads SET status='appointment', updated_at=? WHERE id=?", (_now_iso(), lead_id))
+        con.execute("INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'appointment', ?, ?)", (booking_id, f"lead_id={lead_id}", _now_iso()))
+        con.commit()
+    try:
+        _send_email("Appointment booked", f"Appointment created for {lead['first_name']} {lead['last_name']}.\nEmail: {lead['email']}\nPhone: {lead['phone']}\nService: {lead['interest']}", lead["email"])
+    except Exception:
+        pass
+    return JSONResponse({"ok": True, "booking_id": booking_id, "lead_id": lead_id})
 
 async def create_lead(request: Any) -> JSONResponse:
     body = await request.json()
@@ -409,21 +469,24 @@ async def create_lead(request: Any) -> JSONResponse:
     phone = (body.get("phone") or "").strip()
     company = (body.get("company") or "").strip()
     interest = (body.get("interest") or "demo").strip()
+    source = (body.get("source") or "organic").strip()
+    score = int(body.get("score") or 0)
     if not first or not last or not email:
         return _json_error("first_name, last_name and email are required")
     created_at = _now_iso()
+    updated_at = created_at
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute(
-            "INSERT INTO leads (first_name, last_name, email, phone, company, interest, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (first, last, email, phone, company, interest, created_at),
+            "INSERT INTO leads (first_name, last_name, email, phone, company, interest, status, source, score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'new', ?, ?, ?, ?)",
+            (first, last, email, phone, company, interest, source, score, created_at, updated_at),
         )
         lead_id = cur.lastrowid
         con.commit()
     try:
-        _send_email("New lead: " + first + " " + last, "New lead\nName: " + first + " " + last + "\nEmail: " + email + "\nPhone: " + phone + "\nCompany: " + company + "\nInterest: " + interest)
+        _send_email("New lead: " + first + " " + last, "New lead\nName: " + first + " " + last + "\nEmail: " + email + "\nPhone: " + phone + "\nCompany: " + company + "\nInterest: " + interest + "\nSource: " + source + "\nScore: " + str(score))
     except Exception:
         pass
-    return JSONResponse({"ok": True, "lead_id": lead_id})
+    return JSONResponse({"ok": True, "lead_id": lead_id, "status": "new", "source": source, "score": score})
 
 async def generate_document(request: Request) -> JSONResponse:
     job_id = int(request.path_params["job_id"])
@@ -469,12 +532,12 @@ async def export_leads(request: Request) -> JSONResponse:
     fmt = (request.query_params.get("format") or "json").lower()
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, created_at FROM leads ORDER BY id DESC").fetchall()
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status, source, score, created_at FROM leads ORDER BY id DESC").fetchall()
         data = [dict(r) for r in rows]
     if fmt == "csv":
         import csv, io
         buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=["id", "first_name", "last_name", "email", "phone", "company", "interest", "created_at"])
+        writer = csv.DictWriter(buf, fieldnames=["id", "first_name", "last_name", "email", "phone", "company", "interest", "status", "source", "score", "created_at"])
         writer.writeheader()
         writer.writerows(data)
         return JSONResponse({"csv": buf.getvalue()})
@@ -1308,6 +1371,9 @@ app = Starlette(
         Route("/technician/complete/{booking_id}", technician_complete, methods=["POST"]),
         Route("/api/v1/technicians", create_technician, methods=["POST"]),
         Route("/api/v1/technicians/verify", verify_technician_pin, methods=["POST"]),
+        Route("/api/v1/leads", list_leads, methods=["GET"]),
+        Route("/api/v1/leads/{lead_id}", update_lead, methods=["PATCH"]),
+        Route("/api/v1/leads/{lead_id}/appointment", lead_to_appointment, methods=["POST"]),
         Route("/api/v1/technicians", list_technicians, methods=["GET"]),
         Route("/api/v1/technicians/{technician_id}", get_technician_profile, methods=["GET"]),
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
