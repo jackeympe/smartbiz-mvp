@@ -112,3 +112,39 @@ fly deploy
 ## Railway
 
 Push to GitHub and connect repo in Railway. Set env vars in Railway dashboard.
+
+## Deploy helpers
+
+```bash
+# Render
+curl -X POST https://api.render.com/v1/services \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"service":{"name":"smartbiz-api","type":"web","repo":"https://github.com/jackeympe/smartbiz-mvp","branch":"main","buildCommand":"pip install -r requirements.txt","startCommand":"uvicorn smartbiz.main:app --host 0.0.0.0 --port $PORT","envVars":[{"key":"SMARTBIZ_ADMIN_TOKEN","value":"dev"},{"key":"SMTP_HOST","value":"smtp.gmail.com"},{"key":"SMTP_PORT","value":"587"},{"key":"SMTP_USER","value":""},{"key":"SMTP_PASS","value":""},{"key":"SMARBIZ_EMAIL_TO","value":""},{"key":"PAYFAST_MERCHANT_ID","value":""},{"key":"PAYFAST_MERCHANT_KEY","value":""},{"key":"SMARBIZ_TECHNICIAN_TOKEN","value":""},{"key":"SMARBIZ_API_URL","value":"https://smartbiz-api.onrender.com"},{"key":"XERO_CLIENT_ID","value":""},{"key":"XERO_CLIENT_SECRET","value":""},{"key":"XERO_TENANT_ID","value":""}]}}'
+```
+
+## SMTP test mailbox
+
+Use a real mailbox or sandbox SMTP:
+```bash
+cd C:/Users/jacke/Downloads/smartbiz-mvp
+PYTHONPATH='' .venv/Scripts/python.exe tests/test_smtp_integration.py
+```
+
+## Lead import example
+
+```bash
+curl -X POST http://localhost:8000/api/v1/leads/import \
+  -H "Content-Type: application/json" \
+  -H "x-smartbiz-token: dev" \
+  -d '{"source":"import","leads":[{"first_name":"John","last_name":"Doe","email":"john@example.com","phone":"+27123456789","company":"Acme","interest":"site-inspection"}]}'
+```
+
+## First outreach
+
+```bash
+curl -X POST http://localhost:8000/api/v1/leads/1/outreach \
+  -H "Content-Type: application/json" \
+  -H "x-smartbiz-token: dev" \
+  -d '{"template":"cold_intro"}'
+```

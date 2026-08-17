@@ -48,31 +48,28 @@
   <div class="wrap">
     <section id="admin-login" class="lead">
       <h2>Admin Login</h2>
-      <p class="muted">Enter the admin token to access the dashboard.</p>
       <form id="admin-login-form">
-        <input id="admin-token" type="password" placeholder="Admin token" class="full" required />
-        <div class="full">
-          <button class="btn btn-primary" type="submit">Login</button>
-        </div>
-        <div id="admin-login-message" class="msg full"></div>
+        <input id="admin-token" placeholder="Admin token" class="full" />
+        <button class="btn btn-primary" type="submit">Login</button>
       </form>
+      <div id="login-msg" class="msg"></div>
     </section>
 
-    <section id="admin-app" class="hidden">
+    <div id="admin-panel" class="hidden">
       <header>
         <div class="brand">
-          <div class="logo">SB</div>
+          <div class="logo">SF</div>
           <div>
             <div class="title">SmartBiz Admin</div>
             <div class="subtitle">Jobs, leads, bookings, and technician completion.</div>
           </div>
         </div>
         <div class="row">
-          <div class="pill" id="admin-token-pill">Offline ready</div>
-          <button class="btn" onclick="exportLeads()">Export Leads</button>
-          <button class="btn" onclick="exportQuiz()">Export Quiz</button>
-          <button class="btn" onclick="exportAll()">Export All</button>
+          <button class="btn" onclick="loadJobs()">Refresh Jobs</button>
+          <button class="btn" onclick="loadLeads()">Refresh Leads</button>
+          <button class="btn" onclick="loadBookings()">Refresh Bookings</button>
           <button class="btn" onclick="loadAnalytics()">Analytics</button>
+          <button class="btn" onclick="exportAll()">Export All</button>
           <button class="btn" id="admin-logout">Logout</button>
         </div>
       </header>
@@ -80,9 +77,6 @@
       <div class="grid">
         <section class="card">
           <h2>Jobs</h2>
-          <div class="row">
-            <button class="btn" onclick="loadJobs()">Refresh</button>
-          </div>
           <div id="jobs-msg" class="msg"></div>
           <div style="max-height: 420px; overflow: auto;">
             <table>
@@ -103,7 +97,7 @@
           <div style="max-height: 420px; overflow: auto;">
             <table>
               <thead>
-                <tr><th>ID</th><th>Name</th><th>Email</th><th>Interest</th><th>Created</th></tr>
+                <tr><th>ID</th><th>Name</th><th>Email</th><th>Company</th><th>Phone</th><th>Interest</th><th>Status</th><th>Source</th><th>Score</th><th>Actions</th></tr>
               </thead>
               <tbody id="leads-table"></tbody>
             </table>
@@ -134,6 +128,7 @@
             <div id="tech-form-msg" class="msg full"></div>
           </form>
         </section>
+
         <section class="card">
           <h2>Bookings & Payments</h2>
           <div class="row">
@@ -163,16 +158,26 @@
           </div>
         </section>
       </div>
-    </section>
+    </div>
   </div>
 
   <script>
-    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) ? SMARBIZ_API_URL.replace(/\\/$/, '') : '';
+    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) ? SMARBIZ_API_URL.replace(/\/$/, '') : '';
     const IS_PROD = API_BASE !== '';
     const FALLBACK_LOCAL = 'http://localhost:8000';
-    const EFFECTIVE_API_BASE = IS_PROD ? API_BASE : FALLBACK_LOCAL;
-    let ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
-    let ADMIN_ENABLED = IS_PROD;
+    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || '';
+    let USE_API = !!ADMIN_TOKEN;
+
+    function request(path, options = {}) {
+      const base = USE_API ? API_BASE : FALLBACK_LOCAL;
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-smartbiz-token': ADMIN_TOKEN,
+        ...(options.headers || {})
+      };
+      const init = { ...options, headers };
+      return fetch(base + path, init);
+    }
 
     function setMsg(id, text, kind='') {
       const el = document.getElementById(id);
@@ -181,110 +186,48 @@
       el.className = 'msg ' + kind;
     }
 
-    function setStatusPill() {
-      const pill = document.getElementById('admin-token-pill');
-      if (!pill) return;
-      if (ADMIN_ENABLED) {
-        pill.textContent = 'Prod ready';
-        pill.className = 'pill ok';
-      } else {
-        pill.textContent = 'Offline ready';
-        pill.className = 'pill';
-      }
-    }
-
-    async function request(path, options = {}) {
-      if (!ADMIN_ENABLED) {
-        return Promise.reject(new Error('Admin API is not configured'));
-      }
-      const headers = {
-        'Content-Type': 'application/json',
-        'x-smartbiz-token': ADMIN_TOKEN,
-        ...(options.headers || {})
-      };
-      const init = { ...options, headers };
-      const r = await fetch(EFFECTIVE_API_BASE + path, init);
-      if (!r.ok && IS_PROD) {
-        console.warn('Prod API call failed, status=', r.status, 'for', path);
-      }
-      return r;
-    }
-
-    function showAdmin(show) {
-      const login = document.getElementById('admin-login');
-      const app = document.getElementById('admin-app');
-      if (login) login.classList.toggle('hidden', !show);
-      if (app) app.classList.toggle('hidden', show === false);
-      if (show) {
-        loadJobs();
-        loadLeads();
-        loadBookings();
-      }
-      const searchInput = document.getElementById('booking-search');
-      if (searchInput) {
-        searchInput.addEventListener('input', () => loadBookings());
-      }
+    function showAdmin(enabled) {
+      document.getElementById('admin-panel').classList.toggle('hidden', !enabled);
+      document.getElementById('admin-login').classList.toggle('hidden', enabled);
     }
 
     document.getElementById('admin-login-form').addEventListener('submit', (e) => {
       e.preventDefault();
-      const token = (document.getElementById('admin-token').value || '').trim();
+      const token = document.getElementById('admin-token').value.trim();
+      const msg = document.getElementById('login-msg');
       if (!token) {
-        setMsg('admin-login-message', 'Enter a token.', 'err');
+        msg.textContent = 'Enter a token.';
+        msg.className = 'msg err';
         return;
       }
-      ADMIN_TOKEN = token;
-      setMsg('admin-login-message', '');
+      USE_API = true;
+      setMsg('login-msg', 'Logged in. Loading...', 'ok');
       showAdmin(true);
+      loadJobs();
+      loadLeads();
+      loadBookings();
+      const searchInput = document.getElementById('booking-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => loadBookings());
+      }
     });
 
     document.getElementById('admin-logout').addEventListener('click', () => {
-      ADMIN_TOKEN = '';
+      USE_API = false;
       showAdmin(false);
     });
-
-    async function checkApiStatus() {
-      const msg = document.getElementById('api-status-msg');
-      if (!ADMIN_ENABLED) {
-        msg.textContent = 'Admin API is not configured.';
-        msg.className = 'msg err';
-        setStatusPill();
-        return;
-      }
-      try {
-        const r = await fetch(EFFECTIVE_API_BASE + '/health');
-        const data = await r.json();
-        if (r.ok) {
-          msg.textContent = 'API status: ' + (data.status || 'ok') + (IS_PROD ? ' (prod)' : ' (local)');
-          msg.className = 'msg ok';
-        } else {
-          msg.textContent = 'API status check failed.';
-          msg.className = 'msg err';
-        }
-      } catch (e) {
-        msg.textContent = 'API unreachable from this page.';
-        msg.className = 'msg err';
-      }
-      setStatusPill();
-    }
-
-    if (IS_PROD) {
-      checkApiStatus();
-    } else {
-      setStatusPill();
-    }
 
     async function loadJobs() {
       setMsg('jobs-msg', 'Loading...');
       try {
-        const r = await request('/jobs');
+        const r = await request('/api/v1/jobs');
         const data = await r.json();
         const tbody = document.getElementById('jobs-table');
         tbody.innerHTML = '';
         (data.jobs || []).forEach(job => {
           const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${job.id}</td><td>${job.client}</td><td>${job.site}</td><td><span class="badge">${job.status}</span></td>` +
-            `<td><button class="btn" data-action="approve" data-id="${job.id}">Approve</button> <button class="btn" data-action="reject" data-id="${job.id}">Reject</button> <button class="btn" data-action="doc" data-id="${job.id}">Doc</button></td>`;
+          const client = [job.client, job.site].filter(Boolean).join(' - ');
+          tr.innerHTML = `<td>${job.id}</td><td>${client}</td><td>${job.status}</td><td><button class="btn" data-action="approve" data-id="${job.id}">Approve</button> <button class="btn" data-action="reject" data-id="${job.id}">Reject</button> <button class="btn" data-action="doc" data-id="${job.id}">Doc</button></td>`;
           tbody.appendChild(tr);
         });
         setMsg('jobs-msg', data.jobs?.length ? `Loaded ${data.jobs.length} jobs` : 'No jobs yet.');
@@ -296,20 +239,38 @@
     async function loadLeads() {
       setMsg('leads-msg', 'Loading...');
       try {
-        const r = await request('/leads');
+        const r = await request('/api/v1/leads');
         const data = await r.json();
         const tbody = document.getElementById('leads-table');
         tbody.innerHTML = '';
         (data.leads || []).forEach(lead => {
           const tr = document.createElement('tr');
           const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ');
-          tr.innerHTML = `<td>${lead.id}</td><td>${name}</td><td>${lead.email}</td><td><span class="badge">${lead.interest}</span></td><td>${lead.created_at || ''}</td>`;
+          tr.innerHTML = `<td>${lead.id}</td><td>${name}</td><td>${lead.email}</td><td>${lead.company||''}</td><td>${lead.phone||''}</td><td><span class="badge">${lead.interest}</span></td><td><span class="badge">${lead.status}</span></td><td>${lead.source||''}</td><td>${lead.score??''}</td><td><button class="btn" data-action="lead-outreach" data-id="${lead.id}">Outreach</button> <button class="btn" data-action="lead-appointment" data-id="${lead.id}">Appointment</button></td>`;
           tbody.appendChild(tr);
         });
         setMsg('leads-msg', data.leads?.length ? `Loaded ${data.leads.length} leads` : 'No leads yet.');
       } catch (e) {
         setMsg('leads-msg', 'Failed to load leads.', 'err');
       }
+    }
+
+    async function leadOutreach(lead_id) {
+      const template = prompt('Outreach template: cold_intro, follow_up_1, appointment_confirm, missed_booking', 'cold_intro');
+      if (!template) return;
+      const r = await request(`/api/v1/leads/${lead_id}/outreach`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({template})});
+      const data = await r.json();
+      alert(data.detail || `Sent ${template} outreach to lead ${lead_id}`);
+      loadLeads();
+    }
+
+    async function leadAppointment(lead_id) {
+      const service = prompt('Service: site-inspection, equipment-supply, emergency-support, training', 'site-inspection');
+      if (!service) return;
+      const r = await request(`/api/v1/leads/${lead_id}/appointment`, {method:'POST'});
+      const data = await r.json();
+      alert(data.detail || `Created booking ${data.booking_id} from lead ${lead_id}`);
+      loadLeads(); loadBookings();
     }
 
     async function loadBookings() {
@@ -450,6 +411,23 @@
         } else {
           setMsg('bookings-msg', data.detail || 'QR failed.', 'err');
         }
+      } else if (action === 'pdf') {
+        const r = await request('/bookings/' + id + '/pdf');
+        const data = await r.json();
+        if (r.ok && data.pdf_base64) {
+          const blob = new Blob([Uint8Array.from(atob(data.pdf_base64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = data.filename || ('booking-' + id + '.pdf');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          setMsg('bookings-msg', 'PDF downloaded.', 'ok');
+        } else {
+          setMsg('bookings-msg', data.detail || 'PDF failed.', 'err');
+        }
       } else if (action === 'refund') {
         const r = await request('/bookings/' + id + '/refund', { method: 'POST', body: JSON.stringify({ reason: 'admin-initiated' }) });
         const data = await r.json();
@@ -489,28 +467,18 @@
         } else {
           setMsg('bookings-msg', data.detail || 'Update failed.', 'err');
         }
-      } else if (action === 'pdf') {
-        const r = await request('/bookings/' + id + '/pdf');
-        const data = await r.json();
-        if (r.ok && data.pdf_base64) {
-          const blob = new Blob([Uint8Array.from(atob(data.pdf_base64), c => c.charCodeAt(0))], { type: 'application/pdf' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = data.filename || ('booking-' + id + '.pdf');
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          setMsg('bookings-msg', 'PDF downloaded.', 'ok');
-        } else {
-          setMsg('bookings-msg', data.detail || 'PDF failed.', 'err');
-        }
+      } else if (action === 'history') {
+        loadBookingHistory(id);
+      } else if (action === 'lead-outreach') {
+        leadOutreach(id);
+      } else if (action === 'lead-appointment') {
+        leadAppointment(id);
       }
     }
 
     document.getElementById('jobs-table').addEventListener('click', act);
     document.getElementById('bookings-table').addEventListener('click', act);
+    document.getElementById('leads-table').addEventListener('click', act);
 
     if (ADMIN_TOKEN) {
       showAdmin(true);
@@ -520,16 +488,16 @@
 
     async function exportLeads() {
       try {
-        const r = await request('/leads/export?format=csv');
+        const r = await request('/api/v1/leads/export?format=csv');
         const data = await r.json();
         if (r.ok && data.csv) {
           downloadBlob('leads.csv', data.csv, 'text/csv');
-          setMsg('jobs-msg', 'Leads exported.', 'ok');
+          setMsg('leads-msg', 'Leads exported.', 'ok');
         } else {
-          setMsg('jobs-msg', 'Export failed.', 'err');
+          setMsg('leads-msg', 'Export failed.', 'err');
         }
       } catch (e) {
-        setMsg('jobs-msg', 'Export failed.', 'err');
+        setMsg('leads-msg', 'Export failed.', 'err');
       }
     }
 
