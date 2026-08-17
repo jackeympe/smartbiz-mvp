@@ -437,6 +437,50 @@ async def update_lead(request: Request) -> JSONResponse:
         con.commit()
     return JSONResponse({"ok": True, "updated": list(updates.keys())})
 
+
+async def lead_outreach(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    lead_id = int(request.path_params["lead_id"])
+    body = await request.json() or {}
+    template = (body.get("template") or "cold_intro").strip()
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status FROM leads WHERE id=?", (lead_id,)).fetchone()
+        if not row:
+            return _json_error("lead not found", 404)
+        lead = dict(row)
+    try:
+        from smartbiz.leads import outreach_email
+        content = outreach_email(lead, template=template)
+        _send_email(f"SmartBiz outreach: {template}", content, lead["email"])
+        with lock, sqlite3.connect(DB_PATH) as con:
+            con.execute("UPDATE leads SET status=?, updated_at=? WHERE id=?", ("contacted", _now_iso(), lead_id))
+            con.execute("INSERT INTO job_events (job_id, event_type, detail, created_at) VALUES (?, 'outreach', ?, ?)", (lead_id, f"template={template}", _now_iso()))
+            con.commit()
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=500)
+    return JSONResponse({"ok": True, "template": template, "to": lead["email"]})
+
+
+async def import_leads_json_endpoint(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    body = await request.json() or {}
+    raw = body.get("leads") or body.get("content") or ""
+    if isinstance(raw, list):
+        content = json.dumps(raw)
+    else:
+        content = str(raw)
+    default_source = (body.get("source") or "import").strip()
+    try:
+        from smartbiz.leads import import_leads_json, save_leads
+        leads = import_leads_json(content, default_source=default_source)
+        count = save_leads(leads, DB_PATH)
+    except Exception as e:
+        return JSONResponse({"detail": str(e)}, status_code=400)
+    return JSONResponse({"ok": True, "imported": count})
+
 async def lead_to_appointment(request: Request) -> JSONResponse:
     if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
         return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
@@ -1372,8 +1416,10 @@ app = Starlette(
         Route("/api/v1/technicians", create_technician, methods=["POST"]),
         Route("/api/v1/technicians/verify", verify_technician_pin, methods=["POST"]),
         Route("/api/v1/leads", list_leads, methods=["GET"]),
+        Route("/api/v1/leads/import", import_leads_json_endpoint, methods=["POST"]),
         Route("/api/v1/leads/{lead_id}", update_lead, methods=["PATCH"]),
         Route("/api/v1/leads/{lead_id}/appointment", lead_to_appointment, methods=["POST"]),
+        Route("/api/v1/leads/{lead_id}/outreach", lead_outreach, methods=["POST"]),
         Route("/api/v1/technicians", list_technicians, methods=["GET"]),
         Route("/api/v1/technicians/{technician_id}", get_technician_profile, methods=["GET"]),
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
