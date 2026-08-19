@@ -28,6 +28,7 @@ lock = threading.Lock()
 ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")
 AGENTMAIL_INBOX_ID = os.environ.get("AGENTMAIL_INBOX_ID", "compliance1660@agentmail.to")
 AGENTMAIL_API_KEY = os.environ.get("AGENTMAIL_API_KEY", "")
+WHATSAPP_NUMBER = os.environ.get("WHATSAPP_NUMBER", "")
 
 QUIZ_QUESTIONS = [
   {"id": "q1", "text": "Do you have a current fire risk assessment on file?", "options": ["Yes", "No", "Not sure"]},
@@ -125,11 +126,21 @@ def init_db() -> None:
               status TEXT NOT NULL DEFAULT 'new',
               source TEXT DEFAULT 'organic',
               score INTEGER NOT NULL DEFAULT 0,
+              industry TEXT NOT NULL DEFAULT 'general',
+              location TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL,
               updated_at TEXT NOT NULL
             )
             """
         )
+        try:
+            con.execute("ALTER TABLE leads ADD COLUMN industry TEXT NOT NULL DEFAULT 'general'")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE leads ADD COLUMN location TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS jobs (
@@ -187,11 +198,21 @@ def init_db() -> None:
               evidence_notes TEXT NOT NULL DEFAULT '',
               evidence_photo_url TEXT NOT NULL DEFAULT '',
               assigned_technician_id INTEGER NOT NULL DEFAULT 0,
+              location TEXT NOT NULL DEFAULT '',
+              whatsapp_number TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL DEFAULT ''
             )
             """
         )
-        con.execute("PRAGMA user_version = 3")
+        try:
+            con.execute("ALTER TABLE bookings ADD COLUMN location TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+        try:
+            con.execute("ALTER TABLE bookings ADD COLUMN whatsapp_number TEXT NOT NULL DEFAULT ''")
+        except Exception:
+            pass
+        con.execute("PRAGMA user_version = 4")
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS technicians (
@@ -333,6 +354,35 @@ def _send_email_via_agentmail(subject: str, body: str, to_addr: str) -> None:
     with urllib.request.urlopen(req, timeout=20) as resp:
         resp.read()
 
+def _send_whatsapp_confirmation(booking: dict) -> None:
+    if not WHATSAPP_NUMBER:
+        return
+    number = (booking.get("whatsapp_number") or "").strip()
+    if not number:
+        return
+    text = (
+        f"Hi {booking.get('first_name', '')}, your SmartBiz fire compliance booking #{booking['id']} is confirmed."
+        f"\nService: {booking.get('service', '')}"
+        f"\nLocation: {booking.get('location', '') or 'TBD'}"
+        "\nWe will send timing and technician details here."
+    )
+    payload = json.dumps({
+        "to": number,
+        "text": text,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.agentmail.to/v0/inboxes/messages/send",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {AGENTMAIL_API_KEY}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        resp.read()
+
+
 def _booking_email_subject(event: str, booking_id: int) -> str:
     return f"SmartBiz booking #{booking_id}: {event}"
 
@@ -445,7 +495,7 @@ async def reject_job(request: Request) -> JSONResponse:
 async def list_leads(request: Request) -> JSONResponse:
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status, source, score, created_at FROM leads ORDER BY id DESC").fetchall()
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status, source, score, industry, location, created_at FROM leads ORDER BY id DESC").fetchall()
         data = [dict(r) for r in rows]
     return JSONResponse({"leads": data})
 
@@ -513,6 +563,12 @@ async def lead_to_appointment(request: Request) -> JSONResponse:
     if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
         return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
     lead_id = int(request.path_params["lead_id"])
+    try:
+        body = await request.json() or {}
+    except Exception:
+        body = {}
+    location = (body.get("location") or "").strip()
+    whatsapp_number = (body.get("whatsapp_number") or "").strip()
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
         row = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status FROM leads WHERE id=?", (lead_id,)).fetchone()
@@ -520,8 +576,8 @@ async def lead_to_appointment(request: Request) -> JSONResponse:
             return _json_error("lead not found", 404)
         lead = dict(row)
         cur = con.execute(
-            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
-            (lead["first_name"], lead["last_name"], lead["email"], lead["phone"], lead["company"], lead["interest"] or "site-inspection", 0, "ZAR", _now_iso()),
+            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, location, whatsapp_number, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
+            (lead["first_name"], lead["last_name"], lead["email"], lead["phone"], lead["company"], lead["interest"] or "site-inspection", 0, "ZAR", location, whatsapp_number, _now_iso()),
         )
         booking_id = cur.lastrowid
         con.execute("UPDATE leads SET status='appointment', updated_at=? WHERE id=?", (_now_iso(), lead_id))
@@ -539,7 +595,7 @@ async def confirm_booking(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
     with lock, sqlite3.connect(DB_PATH) as con:
         con.row_factory = sqlite3.Row
-        row = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        row = con.execute("SELECT id, first_name, last_name, email, phone, company, service, status, location, whatsapp_number FROM bookings WHERE id=?", (booking_id,)).fetchone()
         if not row:
             return _json_error("booking not found", 404)
         booking = dict(row)
@@ -553,9 +609,13 @@ async def confirm_booking(request: Request) -> JSONResponse:
     try:
         _send_email(
             _booking_email_subject("confirmed", booking_id),
-            f"Hi {booking.get('first_name', '')},\n\nYour fire compliance booking #{booking_id} is confirmed.\nService: {booking.get('service', '')}\n\nWe'll be in touch with timing and technician details shortly.\n\nBest,\nSmartBiz",
+            f"Hi {booking.get('first_name', '')},\n\nYour fire compliance booking #{booking_id} is confirmed.\nService: {booking.get('service', '')}\nLocation: {booking.get('location', '')}\n\nWe'll be in touch with timing and technician details shortly.\n\nBest,\nSmartBiz",
             booking.get("email"),
         )
+    except Exception:
+        pass
+    try:
+        _send_whatsapp_confirmation(booking)
     except Exception:
         pass
     return JSONResponse({"ok": True, "booking_id": booking_id, "status": "confirmed"})
@@ -570,19 +630,21 @@ async def create_lead(request: Any) -> JSONResponse:
     interest = (body.get("interest") or "demo").strip()
     source = (body.get("source") or "organic").strip()
     score = int(body.get("score") or 0)
+    industry = (body.get("industry") or "general").strip()
+    location = (body.get("location") or "").strip()
     if not first or not last or not email:
         return _json_error("first_name, last_name and email are required")
     created_at = _now_iso()
     updated_at = created_at
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute(
-            "INSERT INTO leads (first_name, last_name, email, phone, company, interest, status, source, score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'new', ?, ?, ?, ?)",
-            (first, last, email, phone, company, interest, source, score, created_at, updated_at),
+            "INSERT INTO leads (first_name, last_name, email, phone, company, interest, status, source, score, industry, location, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'new', ?, ?, ?, ?, ?, ?)",
+            (first, last, email, phone, company, interest, source, score, industry, location, created_at, updated_at),
         )
         lead_id = cur.lastrowid
         con.commit()
     try:
-        _send_email("New lead: " + first + " " + last, "New lead\nName: " + first + " " + last + "\nEmail: " + email + "\nPhone: " + phone + "\nCompany: " + company + "\nInterest: " + interest + "\nSource: " + source + "\nScore: " + str(score))
+        _send_email("New lead: " + first + " " + last, "New lead\nName: " + first + " " + last + "\nEmail: " + email + "\nPhone: " + phone + "\nCompany: " + company + "\nInterest: " + interest + "\nSource: " + source + "\nScore: " + str(score) + "\nIndustry: " + industry + "\nLocation: " + location)
     except Exception:
         pass
     return JSONResponse({"ok": True, "lead_id": lead_id, "status": "new", "source": source, "score": score})
@@ -727,13 +789,15 @@ async def create_booking(request: Request) -> JSONResponse:
     amount_cents = int(body.get("amount_cents") or 0)
     currency = (body.get("currency") or "ZAR").strip()
     assigned_technician_id = int(body.get("assigned_technician_id") or 0)
+    location = (body.get("location") or "").strip()
+    whatsapp_number = (body.get("whatsapp_number") or "").strip()
     if not first or not last or not email:
         return _json_error("first_name, last_name and email are required")
     created_at = _now_iso()
     with lock, sqlite3.connect(DB_PATH) as con:
         cur = con.execute(
-            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, assigned_technician_id, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)",
-            (first, last, email, phone, company, service, amount_cents, currency, assigned_technician_id, created_at),
+            "INSERT INTO bookings (first_name, last_name, email, phone, company, service, status, amount_cents, currency, assigned_technician_id, location, whatsapp_number, created_at) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)",
+            (first, last, email, phone, company, service, amount_cents, currency, assigned_technician_id, location, whatsapp_number, created_at),
         )
         booking_id = cur.lastrowid
         con.commit()
