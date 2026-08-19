@@ -21,10 +21,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from io import BytesIO
+import subprocess
 
 DB_PATH = "smartbiz.sqlite"
 lock = threading.Lock()
 ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")
+AGENTMAIL_INBOX_ID = os.environ.get("AGENTMAIL_INBOX_ID", "compliance1660@agentmail.to")
+AGENTMAIL_API_KEY = os.environ.get("AGENTMAIL_API_KEY", "")
 
 QUIZ_QUESTIONS = [
   {"id": "q1", "text": "Do you have a current fire risk assessment on file?", "options": ["Yes", "No", "Not sure"]},
@@ -291,19 +294,44 @@ def _send_email(subject: str, body: str, to_addr: str | None = None) -> None:
     user = os.environ.get("SMTP_USER")
     password = os.environ.get("SMTP_PASS")
     to_addr = to_addr or os.environ.get("SMARTBIZ_EMAIL_TO") or user
-    if not all([host, port, user, password, to_addr]):
-        raise RuntimeError("SMTP is not configured")
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = user
-    msg["To"] = to_addr
-    try:
-        with smtplib.SMTP(host, port, timeout=20) as s:
-            s.starttls()
-            s.login(user, password)
-            s.send_message(msg)
-    except Exception:
-        pass
+    if all([host, port, user, password, to_addr]):
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = user
+        msg["To"] = to_addr
+        try:
+            with smtplib.SMTP(host, port, timeout=20) as s:
+                s.starttls()
+                s.login(user, password)
+                s.send_message(msg)
+                return
+        except Exception:
+            pass
+    if AGENTMAIL_API_KEY and AGENTMAIL_INBOX_ID and to_addr:
+        try:
+            _send_email_via_agentmail(subject, body, to_addr)
+        except Exception:
+            pass
+
+
+def _send_email_via_agentmail(subject: str, body: str, to_addr: str) -> None:
+    payload = json.dumps({
+        "inbox_id": AGENTMAIL_INBOX_ID,
+        "to": to_addr,
+        "subject": subject,
+        "text": body,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.agentmail.to/v0/inboxes/messages/send",
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {AGENTMAIL_API_KEY}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        resp.read()
 
 def _booking_email_subject(event: str, booking_id: int) -> str:
     return f"SmartBiz booking #{booking_id}: {event}"
