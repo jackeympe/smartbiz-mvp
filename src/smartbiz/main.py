@@ -76,7 +76,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app: Any, max_requests: int = 120, window_seconds: int = 60) -> None:
+    def __init__(self, app: Any, max_requests: int = 600, window_seconds: int = 60) -> None:
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
