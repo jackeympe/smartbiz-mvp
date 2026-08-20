@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SmartBiz Fire Safety helps South African teams pass fire compliance inspections, generate COCs, assign technicians, and track renewals." />
+  <meta name="keywords" content="fire compliance, COC, inspection, SmartBiz, South Africa, SAQCC-Fire, safety, technicians, PDF" />
+  <meta property="og:title" content="SmartBiz Fire Safety — Fire Compliance Made Simple" />
+  <meta property="og:description" content="Inspection scheduling, technician completion, COC generation, and compliance tracking for South African teams." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://smartbiz.fire" />
+  <meta property="og:image" content="https://smartbiz.fire/og-image.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="SmartBiz Fire Safety — Fire Compliance Made Simple" />
+  <meta name="twitter:description" content="Inspection scheduling, technician completion, COC generation, and compliance tracking for South African teams." />
+  <link rel="canonical" href="https://smartbiz.fire/" />
+  <title>SmartBiz Safety | Fire Compliance Made Simple</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --muted:#94a3b8; --accent:#f97316; --accent-2:#fb923c; --success:#22c55e; --error:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: radial-gradient(1200px 600px at 10% -20%, #1d4ed8 0%, transparent 60%), radial-gradient(1200px 600px at 110% 10%, #b45309 0%, transparent 55%), var(--bg); color: var(--text); min-height: 100vh; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 40px 20px; }
+    .header { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #b91c1c); display: grid; place-items: center; font-weight: 800; letter-spacing: 0.5px; }
+    .title { font-size: 22px; font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+    .pill { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); font-size: 12px; color: var(--muted); }
+    .hero { margin-top: 44px; padding: 56px 28px; border-radius: 24px; background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 20px 60px rgba(0,0,0,0.35); }
+    .hero h1 { font-size: 46px; line-height: 1.1; margin: 0 0 14px; }
+    .hero p { color: var(--muted); font-size: 18px; max-width: 760px; margin: 0 auto 28px; }
+    .cta-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--text); text-decoration: none; font-weight: 600; cursor: pointer; }
+    .btn:hover { background: rgba(255,255,255,0.14); }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #b91c1c); border-color: transparent; }
+    .btn-primary:hover { filter: brightness(1.05); }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 28px; }
+    .stat { padding: 16px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); text-align: center; }
+    .stat strong { display: block; font-size: 22px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 28px; }
+    .card { padding: 18px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+    .card h3 { margin: 6px 0 6px; font-size: 16px; }
+    .card p { margin: 0; color: var(--muted); font-size: 13px; }
+    .icon { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); }
+    .section-title { margin-top: 44px; font-size: 22px; font-weight: 700; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+    .tile { padding: 18px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+    .tile h4 { margin: 8px 0 6px; font-size: 15px; }
+    .tile p { margin: 0; color: var(--muted); font-size: 13px; }
+    .lead { margin-top: 44px; padding: 24px; border-radius: 18px; background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)); border: 1px solid rgba(255,255,255,0.14); }
+    .lead h2 { margin: 0 0 14px; font-size: 24px; }
+    .quiz { margin-top: 18px; padding: 18px; border-radius: 14px; background: rgba(15,23,36,0.6); border: 1px solid rgba(255,255,255,0.12); }
+    .question { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+    .options { display: grid; gap: 8px; }
+    .option { padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06); color: var(--text); cursor: pointer; }
+    .option.selected { border-color: var(--accent-2); background: rgba(249,115,22,0.15); }
+    .actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+    form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .full { grid-column: 1 / -1; }
+    input, select, textarea { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,36,0.6); color: var(--text); }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent-2); }
+    textarea { min-height: 90px; resize: vertical; }
+    .msg { margin-top: 10px; font-size: 14px; min-height: 20px; }
+    .ok { color: var(--success); }
+    .err { color: var(--error); }
+    .muted { color: var(--muted); }
+    .hidden { display: none; }
+    @media (max-width: 860px) { .cards, .stats, .grid-3 { grid-template-columns: 1fr; } .hero h1 { font-size: 30px; } form { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="brand">
+        <div class="logo">SF</div>
+        <div>
+          <div class="title">SmartBiz Fire Safety</div>
+          <div class="subtitle">South Africa's fire and safety compliance platform</div>
+        </div>
+      </div>
+      <div class="pill">SAQCC-Fire Reg. 22/064</div>
+    </header>
+
+    <section class="hero">
+      <h1>Fire compliance that actually gets done.</h1>
+      <p>SmartBiz replaces paper checklists, spreadsheets, and missed inspections with one trusted system used by property managers, facilities teams, and safety officers across South Africa.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#lead">Book Your Free Compliance Check</a>
+        <a class="btn" href="#modules">See How It Works</a>
+        <button class="btn" id="start-quiz">Check My Readiness</button>
+      </div>
+      <div id="status-msg" class="msg" style="text-align:center; max-width: 760px; margin: 10px auto 0;"></div>
+      <div class="stats">
+        <div class="stat"><strong>200+</strong><span>Sites inspected</span></div>
+        <div class="stat"><strong>99%</strong><span>On-time completion</span></div>
+        <div class="stat"><strong>24hr</strong><span>Document turnaround</span></div>
+      </div>
+    </section>
+
+    <section id="modules">
+      <div class="section-title">Built for real safety operations</div>
+      <div class="cards">
+        <div class="card"><div class="icon">📋</div><h3>Compliance Quiz</h3><p>Instant readiness score and next-step recommendations</p></div>
+        <div class="card"><div class="icon">📅</div><h3>Inspections & Bookings</h3><p>Schedule, assign, and track every job</p></div>
+        <div class="card"><div class="icon">📄</div><h3>Certificates & Docs</h3><p>Generate COCs and PDF records automatically</p></div>
+        <div class="card"><div class="icon">🧾</div><h3>Invoicing & Payments</h3><p>PayFast checkout and Xero accounting</p></div>
+      </div>
+    </section>
+
+    <section class="section-title" style="margin-top:44px;">What teams actually get</section>
+    <div class="grid-3">
+      <div class="tile"><h4>Faster Inspections</h4><p>Guided mobile completion for technicians with evidence capture</p></div>
+      <div class="tile"><h4>Audit-Ready Records</h4><p>Full event history, PDFs, and evidence trails</p></div>
+      <div class="tile"><h4>No More Missed Renewals</h4><p>Stay ahead of compliance deadlines and expiry dates</p></div>
+      <div class="tile"><h4>Client Confidence</h4><p>Professional documentation and transparent status tracking</p></div>
+      <div class="tile"><h4>Secure Access</h4><p>Role-based admin, technician, and client access</p></div>
+      <div class="tile"><h4>Local Support</h4><p>Built for South Africa with SAQCC-Fire alignment</p></div>
+    </div>
+
+    <section class="section-title" style="margin-top:44px;">Trusted by operators who can’t afford non-compliance</section>
+    <div class="grid-3">
+      <div class="tile"><h4>“We cut inspection prep from 3 days to 3 hours.”</h4><p>Facilities manager, Johannesburg CBD</p></div>
+      <div class="tile"><h4>“COCs and records are now instant.”</h4><p>Safety officer, Cape Town</p></div>
+      <div class="tile"><h4>“Technician assignment and QR completion saved us.”</h4><p>Property portfolio manager, Durban</p></div>
+    </div>
+
+    <section class="section-title" style="margin-top:44px;">Simple pricing for every team</section>
+    <div class="grid-3">
+      <div class="tile">
+        <h4>Starter</h4>
+        <p>Free compliance quiz and basic booking</p>
+        <p><strong>R0/month</strong></p>
+      </div>
+      <div class="tile">
+        <h4>Operations</h4>
+        <p>Inspections, PDFs, technician mobile, and analytics</p>
+        <p><strong>R499/month</strong></p>
+      </div>
+      <div class="tile">
+        <h4>Enterprise</h4>
+        <p>Multi-site, Xero sync, PayFast checkout, and priority support</p>
+        <p><strong>R1,299/month</strong></p>
+      </div>
+    </div>
+
+    <section class="section-title" style="margin-top:44px;">Case study: 48hr compliance rescue</section>
+    <div class="lead">
+      <h2>How a 22-storey office building avoided shutdown</h2>
+      <p class="muted">A facilities team used SmartBiz to schedule inspections, assign technicians, generate COCs, and sync invoices to Xero within 48 hours — before the compliance deadline.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#lead">Book Your Free Compliance Check</a>
+        <a class="btn" href="#modules">See How It Works</a>
+      </div>
+    </div>
+
+    <section id="lead" class="lead">
+      <h2>Book Your Free Compliance Check</h2>
+      <p class="muted">Get a guided inspection, technician assignment, PDF certificate, and clear next steps — no paperwork.</p>
+      <form id="lead-form">
+        <input name="first_name" placeholder="First name" required />
+        <input name="last_name" placeholder="Last name" required />
+        <input name="email" type="email" placeholder="Email" required />
+        <input name="phone" placeholder="Phone" />
+        <input name="company" placeholder="Company or property name" class="full" />
+        <select name="interest" class="full">
+          <option value="site-inspection">Site inspection</option>
+          <option value="equipment-supply">Equipment supply</option>
+          <option value="emergency-support">Emergency support</option>
+          <option value="training">Training</option>
+        </select>
+        <input type="hidden" name="quiz_service" value="" />
+        <div class="full">
+          <button class="btn btn-primary" type="submit">Book My Free Check</button>
+        </div>
+        <div id="lead-message" class="msg full"></div>
+      </form>
+    </section>
+
+    <section class="lead" style="margin-top: 44px;">
+      <h2>Compliance Quiz</h2>
+      <p class="muted">Answer quick questions and we’ll show your readiness score.</p>
+      <div id="quiz-area"></div>
+      <div id="quiz-result" class="msg" style="margin-top:10px;"></div>
+    </section>
+
+    <footer style="margin-top:44px; padding: 18px 0; border-top: 1px solid rgba(255,255,255,0.08); color: var(--muted); font-size: 13px;">
+      SmartBiz Fire Safety · SAQCC-Fire Reg. 22/064
+    </footer>
+  </div>
+
+  <script>
+    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) || 'http://localhost:8000';
+    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
+
+    async function request(path, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-smartbiz-token': ADMIN_TOKEN,
+        ...(options.headers || {})
+      };
+      const init = { ...options, headers };
+      const r = await fetch(API_BASE + path, init);
+      return r;
+    }
+
+    function setMsg(id, text, kind='') {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg ' + kind;
+    }
+
+    async function submitLead(e) {
+      e.preventDefault();
+      const msg = document.getElementById('lead-message');
+      const form = e.target;
+      const data = Object.fromEntries(new FormData(form).entries());
+      const payload = {
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        company: data.company || '',
+        service: data.quiz_service || data.interest || 'site-inspection',
+        amount_cents: data.interest === 'equipment-supply' ? 15000 : 5000,
+        currency: 'ZAR',
+        source: 'website',
+      };
+      try {
+        const r = await request('/api/v1/bookings', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const res = await r.json();
+        if (r.ok) {
+          if (res.payfast_url) {
+            window.location.href = res.payfast_url;
+            return;
+          }
+          msg.textContent = 'Booking created. Payment will be arranged.';
+          msg.className = 'msg full ok';
+          form.reset();
+        } else {
+          msg.textContent = res.detail || 'Submission failed.';
+          msg.className = 'msg full err';
+        }
+      } catch (err) {
+        msg.textContent = 'Saved locally because the API is offline.';
+        msg.className = 'msg full muted';
+        const key = 'smartbiz_leads';
+        const leads = JSON.parse(localStorage.getItem(key) || '[]');
+        leads.push({ ...payload, saved_at: new Date().toISOString() });
+        localStorage.setItem(key, JSON.stringify(leads));
+      }
+    }
+    document.getElementById('lead-form').addEventListener('submit', submitLead);
+
+    async function checkStatus() {
+      const msg = document.getElementById('status-msg');
+      try {
+        const r = await request('/api/v1/status', { method: 'GET' });
+        const data = await r.json();
+        if (r.ok) {
+          msg.textContent = `API OK — jobs: ${data.counts.jobs}, leads: ${data.counts.leads}, bookings: ${data.counts.bookings}`;
+          msg.className = 'msg ok';
+        } else {
+          msg.textContent = data.detail || 'Status check failed.';
+          msg.className = 'msg err';
+        }
+      } catch (err) {
+        msg.textContent = 'API is offline or unreachable.';
+        msg.className = 'msg err';
+      }
+    }
+
+    let quizQuestions = [];
+    let quizAnswers = {};
+    async function loadQuiz() {
+      const r = await request('/api/v1/quiz/questions');
+      const data = await r.json();
+      quizQuestions = data.questions || [];
+      renderQuiz();
+    }
+
+    function renderQuiz() {
+      const area = document.getElementById('quiz-area');
+      area.innerHTML = '';
+      quizQuestions.forEach((q, idx) => {
+        const qDiv = document.createElement('div');
+        qDiv.className = 'quiz';
+        qDiv.innerHTML = `<div class="question">${idx + 1}. ${q.text}</div><div class="options" id="q-${q.id}"></div>`;
+        area.appendChild(qDiv);
+        const opts = document.getElementById('q-' + q.id);
+        q.options.forEach(opt => {
+          const btn = document.createElement('button');
+          btn.className = 'option';
+          btn.textContent = opt;
+          btn.onclick = () => {
+            opts.querySelectorAll('.option').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
+            quizAnswers[q.id] = opt;
+          };
+          opts.appendChild(btn);
+        });
+      });
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const submit = document.createElement('button');
+      submit.className = 'btn btn-primary';
+      submit.textContent = 'Submit Quiz';
+      submit.onclick = submitQuiz;
+      actions.appendChild(submit);
+
+      const book = document.createElement('button');
+      book.className = 'btn';
+      book.textContent = 'Book Service / Equipment';
+      book.onclick = () => {
+        const score = Object.values(quizAnswers).filter(v => v === 'Yes').length;
+        const service = score >= 5 ? 'site-inspection' : 'emergency-support';
+        const interest = score >= 7 ? 'service' : 'equipment-supply';
+        window.location.hash = '#lead';
+        const form = document.getElementById('lead-form');
+        form.querySelector('select[name="interest"]').value = interest || 'service';
+        const svcInput = document.createElement('input');
+        svcInput.type = 'hidden';
+        svcInput.name = 'quiz_service';
+        svcInput.value = service;
+        form.appendChild(svcInput);
+      };
+      actions.appendChild(book);
+      area.appendChild(actions);
+    }
+
+    async function submitQuiz() {
+      const msg = document.getElementById('quiz-result');
+      const form = document.getElementById('lead-form');
+      const nameInputs = form.querySelectorAll('input[name="first_name"], input[name="last_name"], input[name="email"], input[name="phone"], input[name="company"]');
+      const payload = {
+        first_name: form.querySelector('input[name="first_name"]')?.value || '',
+        last_name: form.querySelector('input[name="last_name"]')?.value || '',
+        email: form.querySelector('input[name="email"]')?.value || '',
+        phone: form.querySelector('input[name="phone"]')?.value || '',
+        company: form.querySelector('input[name="company"]')?.value || '',
+        answers: quizAnswers,
+      };
+      try {
+        const r = await request('/api/v1/quiz/submit', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+        if (r.ok) {
+          msg.textContent = `Score: ${data.score}/${quizQuestions.length} — ${data.label}`;
+          msg.className = 'msg ok';
+          if (data.score <= 3) {
+            msg.textContent += ' You likely need equipment or urgent inspection.';
+          }
+        } else {
+          msg.textContent = data.detail || 'Quiz failed.';
+          msg.className = 'msg err';
+        }
+      } catch (err) {
+        msg.textContent = 'Quiz submission failed.';
+        msg.className = 'msg err';
+      }
+    }
+
+    document.getElementById('start-quiz').addEventListener('click', () => {
+      document.getElementById('quiz-area').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    loadQuiz();
+    checkStatus();
+  </script>
+</body>
+</html>

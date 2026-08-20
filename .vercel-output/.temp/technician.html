@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartBiz Technician</title>
+  <style>
+    :root { --bg:#0f172a; --card:#1e293b; --text:#f8fafc; --muted:#94a3b8; --accent:#f97316; --success:#22c55e; --error:#ef4444; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 420px; margin: 0 auto; padding: 28px 18px; }
+    .card { padding: 18px; border-radius: 14px; background: var(--card); border: 1px solid rgba(255,255,255,0.08); margin-top: 14px; }
+    h1 { font-size: 20px; margin: 0 0 10px; }
+    p { color: var(--muted); font-size: 14px; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: var(--muted); }
+    .btn { width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.08); color: var(--text); font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), #b91c1c); border-color: transparent; }
+    .msg { margin-top: 10px; font-size: 14px; min-height: 20px; }
+    .ok { color: var(--success); }
+    .err { color: var(--error); }
+    .muted { color: var(--muted); }
+    .hidden { display: none; }
+    input[type="password"], input[type="text"] { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.18); background: rgba(15,23,36,0.6); color: var(--text); margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section id="tech-login" class="card">
+      <h1>Technician Access</h1>
+      <p>Enter your technician PIN to continue.</p>
+      <input id="tech-pin" type="password" placeholder="PIN" autocomplete="one-time-code" />
+      <button class="btn btn-primary" id="tech-login-btn">Continue</button>
+      <div id="tech-login-msg" class="msg"></div>
+    </section>
+
+    <section id="tech-app" class="hidden">
+      <div class="card">
+        <h1>Job Completion</h1>
+        <p>Confirm you visited the site and completed the job.</p>
+        <div id="tech-booking-info"></div>
+        <input id="tech-notes" placeholder="Evidence notes" class="full" />
+        <input id="tech-photo" placeholder="Evidence photo URL" class="full" />
+        <button class="btn btn-primary" id="tech-complete-btn">Mark Job Complete</button>
+        <div id="tech-msg" class="msg"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) || 'http://localhost:8000';
+    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || 'dev';
+    let bookingId = '';
+    let techToken = '';
+
+    function setMsg(id, text, kind='') {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg ' + kind;
+    }
+
+    async function request(path, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-smartbiz-token': ADMIN_TOKEN,
+        ...(options.headers || {})
+      };
+      const init = { ...options, headers };
+      const r = await fetch(API_BASE + path, init);
+      return r;
+    }
+
+    function showApp(show) {
+      document.getElementById('tech-login').classList.toggle('hidden', show);
+      document.getElementById('tech-app').classList.toggle('hidden', !show);
+    }
+
+    document.getElementById('tech-login-btn').addEventListener('click', async () => {
+      const pin = (document.getElementById('tech-pin').value || '').trim();
+      if (!pin) {
+        setMsg('tech-login-msg', 'Enter a PIN.', 'err');
+        return;
+      }
+      const verify = await request('/api/v1/technicians/verify', { method: 'POST', body: JSON.stringify({ pin }) });
+      const verifyData = await verify.json();
+      if (!verify.ok) {
+        setMsg('tech-login-msg', verifyData.detail || 'Invalid PIN.', 'err');
+        return;
+      }
+      techToken = pin;
+      const params = new URLSearchParams(window.location.search);
+      bookingId = params.get('booking_id') || '';
+      if (!bookingId) {
+        setMsg('tech-login-msg', 'Missing booking_id.', 'err');
+        return;
+      }
+      setMsg('tech-login-msg', '');
+      showApp(true);
+      loadBookingInfo();
+    });
+
+    async function loadBookingInfo() {
+      try {
+        const r = await request(`/api/v1/bookings`);
+        const data = await r.json();
+        const booking = (data.bookings || []).find(b => String(b.id) === String(bookingId));
+        const info = document.getElementById('tech-booking-info');
+        if (!booking) {
+          info.innerHTML = '<p>Booking not found.</p>';
+          return;
+        }
+        info.innerHTML = `
+          <p><strong>Booking #:</strong> ${booking.id}</p>
+          <p><strong>Client:</strong> ${booking.first_name} ${booking.last_name}</p>
+          <p><strong>Service:</strong> ${booking.service}</p>
+          <p><strong>Amount:</strong> ${(booking.amount_cents||0)/100} ${booking.currency}</p>
+          <p><strong>Status:</strong> <span class="badge">${booking.status}</span></p>
+        `;
+      } catch (e) {
+        setMsg('tech-msg', 'Failed to load booking.', 'err');
+      }
+    }
+
+    document.getElementById('tech-complete-btn').addEventListener('click', async () => {
+      try {
+        const notes = (document.getElementById('tech-notes').value || '').trim();
+        const photo = (document.getElementById('tech-photo').value || '').trim();
+        const r = await request(`/technician/complete/${bookingId}?token=${encodeURIComponent(techToken)}`, {
+          method: 'POST',
+          body: JSON.stringify({ visited: true, completed: true, evidence_notes: notes, evidence_photo_url: photo })
+        });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('tech-msg', 'Job marked complete. Payment released.', 'ok');
+        } else {
+          setMsg('tech-msg', data.detail || 'Completion failed.', 'err');
+        }
+      } catch (e) {
+        setMsg('tech-msg', 'Completion failed.', 'err');
+      }
+    });
+  </script>
+</body>
+</html>

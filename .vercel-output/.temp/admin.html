@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartBiz Admin | Jobs & Leads</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #111827;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: rgba(255,255,255,0.08);
+      --accent: #f97316;
+      --accent-2: #fb923c;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warn: #eab308;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--text); }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 28px 18px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), #b91c1c); display: grid; place-items: center; font-weight: 800; letter-spacing: 0.5px; }
+    .title { font-size: 20px; font-weight: 700; }
+    .subtitle { color: var(--muted); font-size: 12px; }
+    .pill { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .card { padding: 18px; border-radius: 14px; background: var(--card); border: 1px solid var(--border); }
+    .card h2 { margin: 0 0 12px; font-size: 16px; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    th { color: var(--muted); font-weight: 500; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px; background: rgba(255,255,255,0.08); border: 1px solid var(--border); }
+    .btn { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(255,255,255,0.08); color: var(--text); cursor: pointer; }
+    .btn:hover { background: rgba(255,255,255,0.14); }
+    .msg { margin-top: 10px; font-size: 13px; color: var(--muted); min-height: 16px; }
+    .ok { color: var(--success); }
+    .err { color: var(--danger); }
+    .hidden { display: none; }
+    .full { width: 100%; }
+    @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section id="admin-login" class="lead">
+      <h2>Admin Login</h2>
+      <form id="admin-login-form">
+        <input id="admin-token" placeholder="Admin token" class="full" />
+        <button class="btn btn-primary" type="submit">Login</button>
+      </form>
+      <div id="login-msg" class="msg"></div>
+    </section>
+
+    <div id="admin-panel" class="hidden">
+      <header>
+        <div class="brand">
+          <div class="logo">SF</div>
+          <div>
+            <div class="title">SmartBiz Admin</div>
+            <div class="subtitle">Jobs, leads, bookings, and technician completion.</div>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" onclick="loadJobs()">Refresh Jobs</button>
+          <button class="btn" onclick="loadLeads()">Refresh Leads</button>
+          <button class="btn" onclick="loadBookings()">Refresh Bookings</button>
+          <button class="btn" onclick="loadAnalytics()">Analytics</button>
+          <button class="btn" onclick="exportAll()">Export All</button>
+          <button class="btn" id="admin-logout">Logout</button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Jobs</h2>
+          <div id="jobs-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Client</th><th>Site</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="jobs-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Leads</h2>
+          <div class="row">
+            <button class="btn" onclick="loadLeads()">Refresh</button>
+          </div>
+          <div id="leads-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Email</th><th>Company</th><th>Phone</th><th>Interest</th><th>Status</th><th>Source</th><th>Score</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="leads-table"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Technicians</h2>
+          <div class="row">
+            <button class="btn" onclick="loadTechnicians()">Refresh</button>
+          </div>
+          <div id="technicians-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Email</th><th>Active</th></tr>
+              </thead>
+              <tbody id="technicians-table"></tbody>
+            </table>
+          </div>
+          <form id="tech-form" style="margin-top:12px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+            <input id="tech-name" placeholder="Name" class="full" />
+            <input id="tech-email" placeholder="Email" class="full" />
+            <input id="tech-pin" placeholder="PIN" class="full" />
+            <div class="full">
+              <button class="btn btn-primary" type="submit">Create Technician</button>
+            </div>
+            <div id="tech-form-msg" class="msg full"></div>
+          </form>
+        </section>
+
+        <section class="card">
+          <h2>Bookings & Payments</h2>
+          <div class="row">
+            <input id="booking-search" placeholder="Search bookings..." class="full" />
+            <button class="btn" onclick="loadBookings()">Refresh</button>
+            <button class="btn" onclick="loadAnalytics()">Analytics</button>
+          </div>
+          <div id="bookings-msg" class="msg"></div>
+          <div style="max-height: 420px; overflow: auto;">
+            <table>
+              <thead>
+                <tr><th>ID</th><th>Client</th><th>Service</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="bookings-table"></tbody>
+            </table>
+          </div>
+          <div id="analytics-msg" class="msg" style="margin-top:12px;"></div>
+          <div id="booking-history" class="hidden" style="margin-top:16px;">
+            <h3>Booking History</h3>
+            <div id="booking-history-msg" class="msg"></div>
+            <table>
+              <thead>
+                <tr><th>Event</th><th>Detail</th><th>Time</th></tr>
+              </thead>
+              <tbody id="booking-history-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) ? SMARBIZ_API_URL.replace(/\/$/, '') : '';
+    const IS_PROD = API_BASE !== '';
+    const FALLBACK_LOCAL = 'http://localhost:8000';
+    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || '';
+    let USE_API = !!ADMIN_TOKEN;
+
+    function request(path, options = {}) {
+      const base = USE_API ? API_BASE : FALLBACK_LOCAL;
+      const headers = {
+        'Content-Type': 'application/json',
+        'x-smartbiz-token': ADMIN_TOKEN,
+        ...(options.headers || {})
+      };
+      const init = { ...options, headers };
+      return fetch(base + path, init);
+    }
+
+    function setMsg(id, text, kind='') {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg ' + kind;
+    }
+
+    function showAdmin(enabled) {
+      document.getElementById('admin-panel').classList.toggle('hidden', !enabled);
+      document.getElementById('admin-login').classList.toggle('hidden', enabled);
+    }
+
+    document.getElementById('admin-login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const token = document.getElementById('admin-token').value.trim();
+      const msg = document.getElementById('login-msg');
+      if (!token) {
+        msg.textContent = 'Enter a token.';
+        msg.className = 'msg err';
+        return;
+      }
+      USE_API = true;
+      setMsg('login-msg', 'Logged in. Loading...', 'ok');
+      showAdmin(true);
+      loadJobs();
+      loadLeads();
+      loadBookings();
+      const searchInput = document.getElementById('booking-search');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => loadBookings());
+      }
+    });
+
+    document.getElementById('admin-logout').addEventListener('click', () => {
+      USE_API = false;
+      showAdmin(false);
+    });
+
+    async function loadJobs() {
+      setMsg('jobs-msg', 'Loading...');
+      try {
+        const r = await request('/api/v1/jobs');
+        const data = await r.json();
+        const tbody = document.getElementById('jobs-table');
+        tbody.innerHTML = '';
+        (data.jobs || []).forEach(job => {
+          const tr = document.createElement('tr');
+          const client = [job.client, job.site].filter(Boolean).join(' - ');
+          tr.innerHTML = `<td>${job.id}</td><td>${client}</td><td>${job.status}</td><td><button class="btn" data-action="approve" data-id="${job.id}">Approve</button> <button class="btn" data-action="reject" data-id="${job.id}">Reject</button> <button class="btn" data-action="doc" data-id="${job.id}">Doc</button></td>`;
+          tbody.appendChild(tr);
+        });
+        setMsg('jobs-msg', data.jobs?.length ? `Loaded ${data.jobs.length} jobs` : 'No jobs yet.');
+      } catch (e) {
+        setMsg('jobs-msg', 'Failed to load jobs.', 'err');
+      }
+    }
+
+    async function loadLeads() {
+      setMsg('leads-msg', 'Loading...');
+      try {
+        const r = await request('/api/v1/leads');
+        const data = await r.json();
+        const tbody = document.getElementById('leads-table');
+        tbody.innerHTML = '';
+        (data.leads || []).forEach(lead => {
+          const tr = document.createElement('tr');
+          const name = [lead.first_name, lead.last_name].filter(Boolean).join(' ');
+          tr.innerHTML = `<td>${lead.id}</td><td>${name}</td><td>${lead.email}</td><td>${lead.company||''}</td><td>${lead.phone||''}</td><td><span class="badge">${lead.interest}</span></td><td><span class="badge">${lead.status}</span></td><td>${lead.source||''}</td><td>${lead.score??''}</td><td><button class="btn" data-action="lead-outreach" data-id="${lead.id}">Outreach</button> <button class="btn" data-action="lead-appointment" data-id="${lead.id}">Appointment</button></td>`;
+          tbody.appendChild(tr);
+        });
+        setMsg('leads-msg', data.leads?.length ? `Loaded ${data.leads.length} leads` : 'No leads yet.');
+      } catch (e) {
+        setMsg('leads-msg', 'Failed to load leads.', 'err');
+      }
+    }
+
+    async function leadOutreach(lead_id) {
+      const template = prompt('Outreach template: cold_intro, follow_up_1, appointment_confirm, missed_booking', 'cold_intro');
+      if (!template) return;
+      const r = await request(`/api/v1/leads/${lead_id}/outreach`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({template})});
+      const data = await r.json();
+      alert(data.detail || `Sent ${template} outreach to lead ${lead_id}`);
+      loadLeads();
+    }
+
+    async function leadAppointment(lead_id) {
+      const service = prompt('Service: site-inspection, equipment-supply, emergency-support, training', 'site-inspection');
+      if (!service) return;
+      const r = await request(`/api/v1/leads/${lead_id}/appointment`, {method:'POST'});
+      const data = await r.json();
+      alert(data.detail || `Created booking ${data.booking_id} from lead ${lead_id}`);
+      loadLeads(); loadBookings();
+    }
+
+    async function loadBookings() {
+      const msg = document.getElementById('bookings-msg');
+      const search = (document.getElementById('booking-search').value || '').trim().toLowerCase();
+      try {
+        const r = await request('/api/v1/bookings');
+        const data = await r.json();
+        const tbody = document.getElementById('bookings-table');
+        tbody.innerHTML = '';
+        const rows = (data.bookings || []).filter(b => {
+          if (!search) return true;
+          return [b.first_name, b.last_name, b.email, b.service, b.status].some(v => (v || '').toLowerCase().includes(search));
+        });
+        rows.forEach(b => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${b.id}</td><td>${b.first_name} ${b.last_name}</td><td>${b.service}</td><td>${(b.amount_cents||0)/100} ${b.currency}</td><td><span class="badge">${b.status}</span></td>` +
+            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="pdf" data-id="${b.id}">PDF</button> <button class="btn" data-action="xero-contact" data-id="${b.id}">Xero Contact</button> <button class="btn" data-action="xero-invoice" data-id="${b.id}">Xero Invoice</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button> <button class="btn" data-action="admin-update" data-id="${b.id}">Admin Update</button> <button class="btn" data-action="history" data-id="${b.id}">History</button></td>`;
+          tbody.appendChild(tr);
+        });
+        setMsg('bookings-msg', rows.length ? `Loaded ${rows.length} bookings` : 'No bookings match your search.');
+      } catch (e) {
+        setMsg('bookings-msg', 'Failed to load bookings.', 'err');
+      }
+    }
+
+    async function loadBookingHistory(booking_id) {
+      const container = document.getElementById('booking-history');
+      const msg = document.getElementById('booking-history-msg');
+      const tbody = document.getElementById('booking-history-table');
+      tbody.innerHTML = '';
+      try {
+        const r = await request(`/api/v1/bookings/${booking_id}/history`);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Failed');
+        msg.textContent = `History for booking #${booking_id}`;
+        msg.className = 'msg ok';
+        container.classList.remove('hidden');
+        (data.events || []).forEach(ev => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${ev.event_type}</td><td>${ev.detail}</td><td>${ev.created_at}</td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        msg.textContent = 'Failed to load booking history.';
+        msg.className = 'msg err';
+      }
+    }
+
+    async function loadAnalytics() {
+      const msg = document.getElementById('analytics-msg');
+      try {
+        const r = await request('/api/v1/analytics/summary');
+        const data = await r.json();
+        if (r.ok) {
+          msg.textContent = `Leads: ${data.leads} | Bookings: ${data.bookings} | Payments: ${data.payments_confirmed} | Completed: ${data.technician_completed} | Refunds: ${data.refunds}`;
+          msg.className = 'msg ok';
+        } else {
+          msg.textContent = data.detail || 'Analytics failed.';
+          msg.className = 'msg err';
+        }
+      } catch (e) {
+        msg.textContent = 'Analytics failed.';
+        msg.className = 'msg err';
+      }
+    }
+
+    async function loadTechnicians() {
+      const msg = document.getElementById('technicians-msg');
+      try {
+        const r = await request('/api/v1/technicians');
+        const data = await r.json();
+        const tbody = document.getElementById('technicians-table');
+        tbody.innerHTML = '';
+        (data.technicians || []).forEach(tech => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${tech.id}</td><td>${tech.name}</td><td>${tech.email}</td><td><span class="badge">${tech.active ? 'active' : 'inactive'}</span></td>`;
+          tbody.appendChild(tr);
+        });
+        msg.textContent = data.technicians?.length ? `Loaded ${data.technicians.length} technicians` : 'No technicians yet.';
+        msg.className = 'msg ok';
+      } catch (e) {
+        msg.textContent = 'Failed to load technicians.';
+        msg.className = 'msg err';
+      }
+    }
+
+    document.getElementById('tech-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = (document.getElementById('tech-name').value || '').trim();
+      const email = (document.getElementById('tech-email').value || '').trim();
+      const pin = (document.getElementById('tech-pin').value || '').trim();
+      if (!name || !email || !pin) {
+        setMsg('tech-form-msg', 'Name, email, and PIN are required.', 'err');
+        return;
+      }
+      const r = await request('/api/v1/technicians', { method: 'POST', body: JSON.stringify({ name, email, pin }) });
+      const data = await r.json();
+      if (r.ok) {
+        setMsg('tech-form-msg', 'Technician created.', 'ok');
+        document.getElementById('tech-form').reset();
+        loadTechnicians();
+      } else {
+        setMsg('tech-form-msg', data.detail || 'Create failed.', 'err');
+      }
+    });
+
+    async function act(e) {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const id = btn.dataset.id;
+      if (action === 'approve' || action === 'reject') {
+        const path = action === 'approve' ? '/approve' : '/reject';
+        const r = await request('/jobs/' + id + path, { method: 'POST', body: JSON.stringify({ note: action }) });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('jobs-msg', `Job ${id} ${data.status}.`, 'ok');
+          loadJobs();
+        } else {
+          setMsg('jobs-msg', data.detail || 'Action failed.', 'err');
+        }
+      } else if (action === 'doc') {
+        const r = await request('/api/v1/documents/' + id);
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('jobs-msg', 'Document stub: ' + data.type + '.', 'ok');
+          console.log('document', data);
+        } else {
+          setMsg('jobs-msg', data.detail || 'Document failed.', 'err');
+        }
+      } else if (action === 'qr') {
+        const r = await request('/bookings/' + id + '/qr');
+        const data = await r.json();
+        if (r.ok && data.qr_png_base64) {
+          const win = window.open('', '_blank');
+          win.document.write(`<img src="data:image/png;base64,${data.qr_png_base64}" style="max-width:100%;background:#fff;padding:24px;"/>`);
+        } else {
+          setMsg('bookings-msg', data.detail || 'QR failed.', 'err');
+        }
+      } else if (action === 'pdf') {
+        const r = await request('/bookings/' + id + '/pdf');
+        const data = await r.json();
+        if (r.ok && data.pdf_base64) {
+          const blob = new Blob([Uint8Array.from(atob(data.pdf_base64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = data.filename || ('booking-' + id + '.pdf');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          setMsg('bookings-msg', 'PDF downloaded.', 'ok');
+        } else {
+          setMsg('bookings-msg', data.detail || 'PDF failed.', 'err');
+        }
+      } else if (action === 'refund') {
+        const r = await request('/bookings/' + id + '/refund', { method: 'POST', body: JSON.stringify({ reason: 'admin-initiated' }) });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('bookings-msg', 'Booking ' + id + ' refunded.', 'ok');
+          loadBookings();
+        } else {
+          setMsg('bookings-msg', data.detail || 'Refund failed.', 'err');
+        }
+      } else if (action === 'xero-contact') {
+        const r = await request('/xero/bookings/' + id + '/contact', { method: 'POST' });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('bookings-msg', 'Xero contact synced.', 'ok');
+        } else {
+          setMsg('bookings-msg', data.detail || 'Xero contact failed.', 'err');
+        }
+      } else if (action === 'xero-invoice') {
+        const r = await request('/xero/bookings/' + id + '/invoice', { method: 'POST' });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('bookings-msg', 'Xero invoice created.', 'ok');
+        } else {
+          setMsg('bookings-msg', data.detail || 'Xero invoice failed.', 'err');
+        }
+      } else if (action === 'admin-update') {
+        const status = prompt('New status?') || '';
+        const notes = prompt('Evidence notes?') || '';
+        const body = {};
+        if (status) body.status = status;
+        if (notes) body.evidence_notes = notes;
+        const r = await request('/api/v1/bookings/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+        const data = await r.json();
+        if (r.ok) {
+          setMsg('bookings-msg', 'Booking updated: ' + (data.updated || []).join(', ') + '.', 'ok');
+          loadBookings();
+        } else {
+          setMsg('bookings-msg', data.detail || 'Update failed.', 'err');
+        }
+      } else if (action === 'history') {
+        loadBookingHistory(id);
+      } else if (action === 'lead-outreach') {
+        leadOutreach(id);
+      } else if (action === 'lead-appointment') {
+        leadAppointment(id);
+      }
+    }
+
+    document.getElementById('jobs-table').addEventListener('click', act);
+    document.getElementById('bookings-table').addEventListener('click', act);
+    document.getElementById('leads-table').addEventListener('click', act);
+
+    if (ADMIN_TOKEN) {
+      showAdmin(true);
+    } else {
+      showAdmin(false);
+    }
+
+    async function exportLeads() {
+      try {
+        const r = await request('/api/v1/leads/export?format=csv');
+        const data = await r.json();
+        if (r.ok && data.csv) {
+          downloadBlob('leads.csv', data.csv, 'text/csv');
+          setMsg('leads-msg', 'Leads exported.', 'ok');
+        } else {
+          setMsg('leads-msg', 'Export failed.', 'err');
+        }
+      } catch (e) {
+        setMsg('leads-msg', 'Export failed.', 'err');
+      }
+    }
+
+    async function exportQuiz() {
+      try {
+        const r = await request('/quiz/export?format=csv');
+        const data = await r.json();
+        if (r.ok && data.csv) {
+          downloadBlob('quiz_results.csv', data.csv, 'text/csv');
+          setMsg('jobs-msg', 'Quiz exported.', 'ok');
+        } else {
+          setMsg('jobs-msg', 'Export failed.', 'err');
+        }
+      } catch (e) {
+        setMsg('jobs-msg', 'Export failed.', 'err');
+      }
+    }
+
+    async function exportAll() {
+      try {
+        const r = await request('/api/v1/export/all?format=json');
+        const data = await r.json();
+        if (r.ok) {
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'smartbiz-export.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          setMsg('jobs-msg', 'Full export downloaded.', 'ok');
+        } else {
+          setMsg('jobs-msg', 'Export failed.', 'err');
+        }
+      } catch (e) {
+        setMsg('jobs-msg', 'Export failed.', 'err');
+      }
+    }
+
+    function downloadBlob(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
