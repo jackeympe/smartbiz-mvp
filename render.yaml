@@ -10,8 +10,6 @@ services:
         value: 3.11.0
       - key: SMARTBIZ_ADMIN_TOKEN
         sync: false
-      - key: SMARBIZ_TECHNICIAN_TOKEN
-        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -32,5 +30,11 @@ services:
         sync: false
       - key: XERO_TENANT_ID
         sync: false
+      - key: AGENTMAIL_INBOX_ID
+        value: compliance1660@agentmail.to
+      - key: AGENTMAIL_API_KEY
+        sync: false
+      - key: WHATSAPP_NUMBER
+        value: "0677684582"
       - key: SMARBIZ_API_URL
         sync: false
