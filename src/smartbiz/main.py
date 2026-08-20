@@ -499,6 +499,41 @@ async def list_leads(request: Request) -> JSONResponse:
         data = [dict(r) for r in rows]
     return JSONResponse({"leads": data})
 
+async def export_leads_google_sheets(request: Request) -> JSONResponse:
+    spreadsheet_id = (request.query_params.get("spreadsheet_id") or "").strip()
+    worksheet_title = (request.query_params.get("worksheet") or "Leads").strip()
+    if not spreadsheet_id:
+        return _json_error("spreadsheet_id is required")
+    credentials_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
+    if not credentials_path or not os.path.exists(credentials_path):
+        return _json_error("GOOGLE_APPLICATION_CREDENTIALS is not configured or file missing", 500)
+    try:
+        from google.oauth2 import service_account
+        from google.auth.transport.requests import AuthorizedSession
+        import gspread
+    except Exception as e:
+        return _json_error("google export dependency missing: " + str(e), 500)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    credentials = service_account.Credentials.from_service_account_file(credentials_path, scopes=scopes)
+    authed = AuthorizedSession(credentials)
+    client = gspread.Client(auth=credentials, session=authed)
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("SELECT id, first_name, last_name, email, phone, company, interest, status, source, score, industry, location, created_at FROM leads ORDER BY id DESC").fetchall()
+        data = [dict(r) for r in rows]
+    sheet = client.open_by_key(spreadsheet_id)
+    try:
+        worksheet = sheet.worksheet(worksheet_title)
+        worksheet.clear()
+    except Exception:
+        worksheet = sheet.add_worksheet(title=worksheet_title, rows=max(len(data)+1, 2), cols=13)
+    headers = ["id", "first_name", "last_name", "email", "phone", "company", "interest", "status", "source", "score", "industry", "location", "created_at"]
+    values = [headers]
+    for row in data:
+        values.append([row.get(h, "") for h in headers])
+    worksheet.update(values)
+    return JSONResponse({"ok": True, "spreadsheet_id": spreadsheet_id, "worksheet": worksheet_title, "exported": len(data)})
+
 async def update_lead(request: Request) -> JSONResponse:
     if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
         return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
@@ -1542,6 +1577,7 @@ app = Starlette(
         Route("/api/v1/leads/{lead_id}/outreach", lead_outreach, methods=["POST"]),
         Route("/api/v1/technicians", list_technicians, methods=["GET"]),
         Route("/api/v1/technicians/{technician_id}", get_technician_profile, methods=["GET"]),
+        Route("/api/v1/leads/export/google-sheets", export_leads_google_sheets, methods=["GET"]),
         Route("/bookings/{booking_id}/refund", refund_booking, methods=["POST"]),
         Route("/bookings/{booking_id}/payfast-status", payfast_status_update, methods=["POST"]),
         Route("/api/v1/bookings/{booking_id}", update_booking, methods=["PATCH"]),

@@ -1,5 +1,24 @@
 @echo off
-set PYTHONPATH=
-cd /d C:/Users/jacke/Downloads/smartbiz-mvp
+setlocal enabledelayedexpansion
+cd /d C:\Users\jacke\Downloads\smartbiz-mvp
+
+set SMARTBIZ_ADMIN_TOKEN=dev
+set SMTP_HOST=
+set SMTP_PORT=
+set SMTP_USER=
+set SMTP_PASS=
+set SMARTBIZ_EMAIL_TO=
+set PAYFAST_MERCHANT_ID=
+set PAYFAST_MERCHANT_KEY=
+set XERO_CLIENT_ID=EE092CA6A9EF41ABB38629D754A9526F
+set XERO_CLIENT_SECRET=<SECRET_94a11b04>
+set XERO_TENANT_ID=78C3A293-8B24-441A-893E-812B3E8CBE0A
+set XERO_NETWORK_KEY=XJ9ADICWALXRIWIPHJTSM8ZOS2NYEL
+set AGENTMAIL_INBOX_ID=compliance1660@agentmail.to
+set AGENTMAIL_API_KEY=
+set WHATSAPP_NUMBER=0677684582
+set GOOGLE_APPLICATION_CREDENTIALS=
+set SMARBIZ_API_URL=http://localhost:8000
+
 .venv\Scripts\python.exe -m uvicorn smartbiz.main:app --host 0.0.0.0 --port 8000
 pause
