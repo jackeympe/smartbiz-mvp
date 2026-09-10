@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Compliance Portal | SmartBiz Fire Safety</title>
+  <meta name="description" content="Manage your property compliance status, equipment register, inspection reports, certificates of compliance, and quotes." />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="brand">
+        <div class="logo">SF</div>
+        <div>
+          <div class="brand-title">SmartBiz Fire Safety</div>
+          <div class="brand-sub">Customer Compliance Portal</div>
+        </div>
+      </a>
+      <nav class="nav-links">
+        <a href="/">Home</a>
+        <a href="/portal" class="active">Portal Overview</a>
+        <a href="/verify">Verify Cert</a>
+        <a href="/book-inspection" class="nav-cta">Book Service</a>
+      </nav>
+      <div>
+        <span class="pill success" id="portal-status-badge">🟢 ALL SITES COMPLIANT</span>
+      </div>
+    </header>
+
+    <!-- Top KPI Grid -->
+    <div class="grid-4" style="margin-top:16px;">
+      <div class="card">
+        <span class="pill">Active Sites</span>
+        <h3 id="stat-sites" style="font-size:26px; margin:10px 0 0; color:var(--text);">2</h3>
+        <p style="font-size:11px; margin-top:4px;">Johannesburg & Sandton</p>
+      </div>
+      <div class="card">
+        <span class="pill">Registered Equipment</span>
+        <h3 id="stat-equipment" style="font-size:26px; margin:10px 0 0; color:var(--accent);">48</h3>
+        <p style="font-size:11px; margin-top:4px;">Extinguishers & Hose Reels</p>
+      </div>
+      <div class="card">
+        <span class="pill">Valid Certificates (COC)</span>
+        <h3 id="stat-certs" style="font-size:26px; margin:10px 0 0; color:var(--success);">3</h3>
+        <p style="font-size:11px; margin-top:4px;">Audit-Ready & Verified</p>
+      </div>
+      <div class="card">
+        <span class="pill">Next Service Due</span>
+        <h3 id="stat-due" style="font-size:22px; margin:10px 0 0; color:var(--accent-2);">12 Oct 2026</h3>
+        <p style="font-size:11px; margin-top:4px;">32 Days Remaining</p>
+      </div>
+    </div>
+
+    <!-- Main Portal Content Tabs -->
+    <div class="section-box" style="margin-top:24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+        <h2 style="margin:0; font-size:20px;">Property Equipment & Compliance Register</h2>
+        <div style="display:flex; gap:8px;">
+          <a href="/book-inspection" class="btn btn-primary" style="padding:8px 14px; font-size:13px;">+ Request Inspection</a>
+          <a href="/request-quote" class="btn" style="padding:8px 14px; font-size:13px;">Request Quote</a>
+        </div>
+      </div>
+
+      <!-- Equipment Table -->
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
+          <thead>
+            <tr style="border-bottom:1px solid var(--border); color:var(--muted);">
+              <th style="padding:10px;">QR Identifier</th>
+              <th style="padding:10px;">Equipment Type</th>
+              <th style="padding:10px;">Capacity</th>
+              <th style="padding:10px;">Location On-Site</th>
+              <th style="padding:10px;">Last Serviced</th>
+              <th style="padding:10px;">Next Due</th>
+              <th style="padding:10px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="equipment-tbody">
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px; font-family:monospace; color:var(--accent);">SB-FE-000184</td>
+              <td style="padding:10px;">DCP Extinguisher</td>
+              <td style="padding:10px;">9.0 kg</td>
+              <td style="padding:10px;">Level 4 - Server Room</td>
+              <td style="padding:10px;">2026-08-15</td>
+              <td style="padding:10px;">2026-08-15</td>
+              <td style="padding:10px;"><span class="pill success">COMPLIANT</span></td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px; font-family:monospace; color:var(--accent);">SB-FE-000185</td>
+              <td style="padding:10px;">CO2 Extinguisher</td>
+              <td style="padding:10px;">5.0 kg</td>
+              <td style="padding:10px;">Kitchen Area - Floor 2</td>
+              <td style="padding:10px;">2026-08-15</td>
+              <td style="padding:10px;">2026-08-15</td>
+              <td style="padding:10px;"><span class="pill success">COMPLIANT</span></td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px; font-family:monospace; color:var(--accent);">SB-FE-000186</td>
+              <td style="padding:10px;">Fire Hose Reel</td>
+              <td style="padding:10px;">30 metre</td>
+              <td style="padding:10px;">East Stairwell Ground</td>
+              <td style="padding:10px;">2026-08-15</td>
+              <td style="padding:10px;">2026-08-15</td>
+              <td style="padding:10px;"><span class="pill success">COMPLIANT</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Quotes & Certificates Section -->
+    <div class="grid-2" style="margin-top:20px;">
+      <!-- Certificates -->
+      <div class="card">
+        <h3 style="margin-top:0; font-size:16px; color:var(--accent);">Active Certificates of Compliance</h3>
+        <p style="margin-bottom:12px;">Official statutory compliance certificates for insurers and municipal inspectors.</p>
+        <div id="certs-list" style="display:grid; gap:8px;">
+          <div style="padding:12px; background:rgba(255,255,255,0.04); border-radius:10px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong style="font-size:14px; font-family:monospace;">COC-2026-0891</strong>
+              <div style="font-size:12px; color:var(--muted);">Sandton Main Tower · Valid until Aug 2027</div>
+            </div>
+            <a href="/api/v1/documents/1" target="_blank" class="btn" style="padding:6px 10px; font-size:12px;">Download PDF</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quotes for Approval -->
+      <div class="card">
+        <h3 style="margin-top:0; font-size:16px; color:var(--accent-2);">Pending Quotations</h3>
+        <p style="margin-bottom:12px;">Review and approve upcoming service quotes with one click.</p>
+        <div id="quotes-list" style="display:grid; gap:8px;">
+          <div style="padding:12px; background:rgba(255,255,255,0.04); border-radius:10px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong style="font-size:14px; font-family:monospace;">QT-2026-0042</strong>
+              <div style="font-size:12px; color:var(--muted);">Annual Servicing · R 2,553.00 (Incl. VAT)</div>
+            </div>
+            <button class="btn btn-primary" onclick="alert('Quote QT-2026-0042 approved successfully! Our dispatch team is scheduling your technician.')" style="padding:6px 12px; font-size:12px;">Approve Quote</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div style="text-align:center; color:var(--muted); font-size:12px;">
+        © 2026 SmartBiz Fire Safety (Pty) Ltd. Reg# 2025/515436/07 · SAQCC-Fire Reg. 22/064.
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    async function loadPortalData() {
+      try {
+        const r = await fetch('/api/v1/equipment');
+        const data = await r.json();
+        if (data.equipment && data.equipment.length > 0) {
+          const tbody = document.getElementById('equipment-tbody');
+          tbody.innerHTML = '';
+          data.equipment.slice(0, 10).forEach(eq => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border)';
+            tr.innerHTML = `
+              <td style="padding:10px; font-family:monospace; color:var(--accent);">${eq.qr_code}</td>
+              <td style="padding:10px;">${eq.equipment_type}</td>
+              <td style="padding:10px;">${eq.capacity || '4.5kg'}</td>
+              <td style="padding:10px;">${eq.location_on_site || 'Site Location'}</td>
+              <td style="padding:10px;">${eq.last_service_date || '2026-08-15'}</td>
+              <td style="padding:10px;">${eq.next_service_date || '2027-08-15'}</td>
+              <td style="padding:10px;"><span class="pill ${eq.status === 'COMPLIANT' ? 'success' : 'error'}">${eq.status}</span></td>
+            `;
+            tbody.appendChild(tr);
+          });
+          document.getElementById('stat-equipment').textContent = data.equipment.length;
+        }
+      } catch (e) {
+        // Keeps default demo rows
+      }
+    }
+    loadPortalData();
+  </script>
+</body>
+</html>

@@ -23,6 +23,10 @@ import urllib.request
 from io import BytesIO
 import subprocess
 
+from smartbiz.db import init_all_tables
+from smartbiz.auth import seed_default_admin
+from smartbiz.routes_v2 import get_v2_routes
+
 DB_PATH = "smartbiz.sqlite"
 lock = threading.Lock()
 ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")
@@ -287,6 +291,11 @@ def init_db() -> None:
         except Exception:
             pass
         con.commit()
+    try:
+        init_all_tables()
+        seed_default_admin()
+    except Exception:
+        pass
 
 init_db()
 
@@ -1594,7 +1603,7 @@ app = Starlette(
         Route("/bookings/{booking_id}/coc-pdf", coc_booking_document, methods=["GET"]),
         Route("/xero/health", lambda request: JSONResponse({"ok": _xero_configured()}), methods=["GET"]),
         Route("/api/v1/smtp-test", smtp_test_endpoint, methods=["POST"]),
-    ],
+    ] + get_v2_routes(),
     middleware=[
         Middleware(SecurityHeadersMiddleware),
         Middleware(RateLimitMiddleware, max_requests=120, window_seconds=60),

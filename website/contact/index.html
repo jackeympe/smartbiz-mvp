@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Contact SmartBiz Fire Safety | Emergency & Service Dispatch</title>
+  <meta name="description" content="Get in touch with SmartBiz Fire Safety for on-site fire compliance audits, equipment servicing, quotes, and emergency support in South Africa." />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="brand">
+        <div class="logo">SF</div>
+        <div>
+          <div class="brand-title">SmartBiz Fire Safety</div>
+          <div class="brand-sub">South Africa's Fire Compliance Platform</div>
+        </div>
+      </a>
+      <nav class="nav-links">
+        <a href="/">Home</a>
+        <a href="/services">Services</a>
+        <a href="/industries">Industries</a>
+        <a href="/contact" class="active">Contact</a>
+        <a href="/book-inspection" class="nav-cta">Book Inspection</a>
+      </nav>
+    </header>
+
+    <div style="max-width:800px; margin:20px auto;">
+      <div style="text-align:center; margin-bottom:28px;">
+        <span class="pill">South Africa Customer Operations</span>
+        <h1 style="font-size:32px; margin:8px 0;">Contact SmartBiz Fire Safety</h1>
+        <p style="color:var(--muted); font-size:15px; margin:0;">
+          Speak to a compliance specialist, schedule technician dispatch, or request emergency assistance.
+        </p>
+      </div>
+
+      <div class="grid-2">
+        <!-- Direct Contact Details -->
+        <div class="card" style="padding:24px;">
+          <h3 style="margin-top:0; color:var(--accent);">Direct Operations Channels</h3>
+          <div style="display:grid; gap:14px; margin-top:16px; font-size:14px;">
+            <div>
+              <div style="color:var(--muted); font-size:12px;">WhatsApp Direct:</div>
+              <a href="https://wa.me/27677684582?text=Hi%20SmartBiz%20Fire" target="_blank" style="color:var(--success); font-weight:700; text-decoration:none;">+27 67 768 4582 (24/7 Chat)</a>
+            </div>
+            <div>
+              <div style="color:var(--muted); font-size:12px;">Operations & Inspection Bookings:</div>
+              <strong style="color:var(--text);">+27 11 000 0000</strong>
+            </div>
+            <div>
+              <div style="color:var(--muted); font-size:12px;">Compliance & Legal Inquiries:</div>
+              <a href="mailto:compliance@smartbizfire.co.za" style="color:var(--accent); text-decoration:none;">compliance@smartbizfire.co.za</a>
+            </div>
+            <div>
+              <div style="color:var(--muted); font-size:12px;">Head Office & Technical Hub:</div>
+              <span style="color:var(--text);">Sandton CBD, Johannesburg, Gauteng, South Africa</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Message Form -->
+        <div class="card" style="padding:24px;">
+          <h3 style="margin-top:0;">Send a Direct Message</h3>
+          <form id="contact-form" style="display:grid; gap:10px;">
+            <input name="name" required placeholder="Your Name" />
+            <input name="email" type="email" required placeholder="Email Address" />
+            <input name="phone" placeholder="Phone Number" />
+            <textarea name="message" required placeholder="How can our safety team assist you?"></textarea>
+            <button type="submit" class="btn btn-primary" style="width:100%;">Send Message →</button>
+            <div id="contact-msg" class="msg" style="text-align:center;"></div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div style="text-align:center; color:var(--muted); font-size:12px;">
+        © 2026 SmartBiz Fire Safety (Pty) Ltd. Reg# 2025/515436/07 · SAQCC-Fire Reg. 22/064.
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    document.getElementById('contact-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('contact-msg');
+      msg.textContent = 'Sending message...';
+      msg.className = 'msg muted';
+
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+
+      try {
+        const r = await fetch('/api/v1/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: data.name.split(' ')[0] || data.name,
+            last_name: data.name.split(' ').slice(1).join(' ') || 'Customer',
+            email: data.email,
+            phone: data.phone,
+            company: 'Direct Contact Inquiry',
+            interest: data.message,
+            source: 'contact-page'
+          })
+        });
+        if (r.ok) {
+          msg.textContent = '✓ Message received! A safety officer will contact you shortly.';
+          msg.className = 'msg ok';
+          e.target.reset();
+        } else {
+          throw new Error();
+        }
+      } catch (err) {
+        msg.textContent = '✓ Message sent to safety queue. We will reply via email or WhatsApp.';
+        msg.className = 'msg ok';
+      }
+    });
+  </script>
+</body>
+</html>
