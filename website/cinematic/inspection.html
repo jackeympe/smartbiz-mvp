@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Request Inspection — SmartBiz Fire</title><link rel="stylesheet" href="styles.css"></head>
+<body>
+<header class="nav"><a class="brand" href="index.html"><span class="flame">◈</span><span>SMARTBIZ <b>FIRE</b><small>INSPECTION REQUEST</small></span></a><nav><a href="index.html">Home</a><a href="dashboard.html">Operations</a></nav></header>
+<main class="form-wrap">
+  <div class="form-intro"><p class="eyebrow">GET STARTED</p><h1>Request a Fire Safety Inspection</h1><p>Submit the basics. The MVP turns your enquiry into a structured lead for follow-up and scheduling.</p></div>
+  <form id="inspectionForm" class="form">
+    <label>Business name<input name="business" required placeholder="e.g. ABC Restaurant"></label>
+    <div class="two"><label>Contact name<input name="contact" required></label><label>Phone / WhatsApp<input name="phone" required></label></div>
+    <div class="two"><label>Email address<input name="email" type="email" required placeholder="e.g. owner@business.co.za"></label><label>Business type<select name="type"><option>Restaurant</option><option>Office</option><option>Warehouse</option><option>School</option><option>Retail</option><option>Other</option></select></label></div>
+    <label>What do you need?<select name="service"><option>Fire safety inspection</option><option>Extinguisher service</option><option>Hose reel inspection</option><option>Compliance report / certificate</option><option>Full fire safety assessment</option></select></label>
+    <label>Additional details<textarea name="notes" rows="5" placeholder="Number of extinguishers, urgency, existing certificate, etc."></textarea></label>
+    <button class="btn red" type="submit">Submit Inspection Request →</button>
+    <p id="result" class="result" hidden></p>
+  </form>
+</main>
+<footer><span>SmartBiz Fire</span><span>We will follow up with the next step.</span></footer>
+<script>
+document.getElementById('inspectionForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const formData = new FormData(this);
+  const data = Object.fromEntries(formData);
+  
+  // Map form fields to API expectations
+  const [first_name, ...last_name_parts] = (data.contact || '').split(' ');
+  const payload = {
+    first_name: first_name || 'Valued',
+    last_name: last_name_parts.join(' ') || 'Customer',
+    email: data.email,
+    phone: data.phone,
+    company: data.business,
+    interest: data.service,
+    source: 'website',
+    industry: data.type,
+    location: data.location,
+    score: 1 // Default score
+  };
+
+  const r=document.getElementById('result');
+  r.hidden=false;
+  r.textContent='Submitting...';
+
+  try {
+    const response = await fetch('/api/v1/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+        r.textContent = 'Request submitted successfully!';
+        this.reset();
+    } else {
+        r.textContent = 'Failed to submit request.';
+    }
+  } catch (error) {
+    r.textContent = 'Error: ' + error.message;
+  }
+});
+</script>
+</body></html>
