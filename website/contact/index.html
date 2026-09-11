@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
-<nav class="nav"><a class="brand" href="/"><div class="brand-icon">SF</div><div>SMARTBIZ <b>FIRE</b><small>COMPLIANCE · SERVICE · SAFETY</small></div></a><div class="nav-links" id="nav-links"><a href="/">Home</a><a href="/services">Services</a><a href="/compliance">Compliance</a><a href="/about">About</a><a href="/resources">Resources</a><a href="/contact" class="active">Contact</a></div><a class="btn red nav-cta" href="/request-quote">Request a Quote</a><button class="nav-mobile-toggle" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button></nav>
+<nav class="nav"><a class="brand" href="/"><img src="/assets/logo.png" alt="SmartBiz Fire Logo" class="brand-logo" /></a><div class="nav-links" id="nav-links"><a href="/">Home</a><a href="/services">Services</a><a href="/compliance">Compliance</a><a href="/about">About</a><a href="/resources">Resources</a><a href="/contact" class="active">Contact</a></div><a class="btn red nav-cta" href="/request-quote">Request a Quote</a><button class="nav-mobile-toggle" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button></nav>
 
 <section class="page-hero">
   <p class="eyebrow">Get in Touch</p>
@@ -19,7 +19,7 @@
 <div class="contact-grid">
   <div class="contact-info reveal">
     <h3>Contact SmartBiz Fire</h3>
-    <div class="contact-item"><span class="ci">💬</span><a href="https://wa.me/27677684582?text=Hello%20SmartBiz%20Fire." target="_blank" rel="noopener" style="color:var(--green)">WhatsApp: +27 67 768 4582</a></div>
+    <div class="contact-item"><span class="ci">💬</span><a href="https://wa.me/27634965466?text=Hello%20SmartBiz%20Fire." target="_blank" rel="noopener" style="color:var(--green)">WhatsApp: +27 63 496 5466</a></div>
     <div class="contact-item"><span class="ci">📍</span><span>South Africa — serving businesses nationwide</span></div>
     <div class="contact-item"><span class="ci">⏱</span><span>Response time: typically within one business day</span></div>
     <div style="margin-top:32px">
@@ -27,7 +27,7 @@
       <div style="display:flex;flex-direction:column;gap:10px">
         <a class="btn red" href="/book-inspection">Book an Inspection →</a>
         <a class="btn ghost" href="/request-quote">Request a Quote</a>
-        <a class="btn ghost" href="https://wa.me/27677684582?text=Hello%20SmartBiz%20Fire.%20I%20would%20like%20assistance%20with%20fire%20safety%20compliance." target="_blank" rel="noopener" style="border-color:#25d366;color:#25d366">💬 Start WhatsApp Chat</a>
+        <a class="btn ghost" href="https://wa.me/27634965466?text=Hello%20SmartBiz%20Fire.%20I%20would%20like%20assistance%20with%20fire%20safety%20compliance." target="_blank" rel="noopener" style="border-color:#25d366;color:#25d366">💬 Start WhatsApp Chat</a>
       </div>
     </div>
   </div>
@@ -48,14 +48,14 @@
 
 <footer>
   <div class="footer-grid">
-    <div class="footer-brand"><a class="brand" href="/"><div class="brand-icon">SF</div><div>SMARTBIZ <b>FIRE</b></div></a><p style="margin-top:12px">Compliance · Service · Safety</p></div>
+    <div class="footer-brand"><a class="brand" href="/"><img src="/assets/logo.png" alt="SmartBiz Fire Logo" class="brand-logo" /></a><p style="margin-top:12px">Compliance · Service · Safety</p></div>
     <div class="footer-col"><h4>Services</h4><a href="/services">All Services</a><a href="/book-inspection">Book Inspection</a><a href="/request-quote">Request Quote</a></div>
     <div class="footer-col"><h4>Company</h4><a href="/about">About</a><a href="/resources">Resources</a><a href="/portal">Customer Portal</a></div>
     <div class="footer-col"><h4>Legal</h4><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></div>
   </div>
   <div class="footer-bottom"><span>© 2026 SmartBiz Fire</span><span>smartbizfire.co.za</span></div>
 </footer>
-<a class="wa-float" href="https://wa.me/27677684582?text=Hello%20SmartBiz%20Fire." target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+<a class="wa-float" href="https://wa.me/27634965466?text=Hello%20SmartBiz%20Fire." target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
 
 <script>
 const obs=new IntersectionObserver(els=>els.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target);}}),{threshold:0.1});
@@ -76,7 +76,7 @@ document.getElementById('contactForm').addEventListener('submit', async function
     const j=await r.json();
     if(r.ok){ show('success','✓ Message received. We will respond within one business day.'); this.reset(); }
     else { show('error',j.detail||'Failed to send. Please try WhatsApp directly.'); }
-  } catch(err){ show('error','Could not reach our server. Please WhatsApp us on +27 67 768 4582.'); }
+  } catch(err){ show('error','Could not reach our server. Please WhatsApp us on +27 63 496 5466.'); }
   btn.disabled=false; btn.textContent='Send Message →';
   function show(t,m){ res.style.display='block'; res.className='result '+t; res.textContent=m; }
 });

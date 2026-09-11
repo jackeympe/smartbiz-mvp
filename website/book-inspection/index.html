@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
-<nav class="nav"><a class="brand" href="/"><div class="brand-icon">SF</div><div>SMARTBIZ <b>FIRE</b><small>COMPLIANCE · SERVICE · SAFETY</small></div></a><div class="nav-links" id="nav-links"><a href="/">Home</a><a href="/services">Services</a><a href="/compliance">Compliance</a><a href="/about">About</a><a href="/resources">Resources</a><a href="/contact">Contact</a></div><a class="btn red nav-cta" href="/request-quote">Request a Quote</a><button class="nav-mobile-toggle" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button></nav>
+<nav class="nav"><a class="brand" href="/"><img src="/assets/logo.png" alt="SmartBiz Fire Logo" class="brand-logo" /></a><div class="nav-links" id="nav-links"><a href="/">Home</a><a href="/services">Services</a><a href="/compliance">Compliance</a><a href="/about">About</a><a href="/resources">Resources</a><a href="/contact">Contact</a></div><a class="btn red nav-cta" href="/request-quote">Request a Quote</a><button class="nav-mobile-toggle" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button></nav>
 
 <section class="page-hero">
   <p class="eyebrow">Get Started</p>
@@ -68,14 +68,14 @@
 
 <footer>
   <div class="footer-grid">
-    <div class="footer-brand"><a class="brand" href="/"><div class="brand-icon">SF</div><div>SMARTBIZ <b>FIRE</b></div></a><p style="margin-top:12px">Compliance · Service · Safety</p></div>
+    <div class="footer-brand"><a class="brand" href="/"><img src="/assets/logo.png" alt="SmartBiz Fire Logo" class="brand-logo" /></a><p style="margin-top:12px">Compliance · Service · Safety</p></div>
     <div class="footer-col"><h4>Services</h4><a href="/services">All Services</a><a href="/compliance">Compliance</a><a href="/request-quote">Request Quote</a></div>
     <div class="footer-col"><h4>Company</h4><a href="/about">About</a><a href="/contact">Contact</a><a href="/portal">Customer Portal</a></div>
     <div class="footer-col"><h4>Legal</h4><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></div>
   </div>
   <div class="footer-bottom"><span>© 2026 SmartBiz Fire</span><span>smartbizfire.co.za</span></div>
 </footer>
-<a class="wa-float" href="https://wa.me/27677684582?text=Hello%20SmartBiz%20Fire.%20I%20would%20like%20to%20book%20a%20fire%20safety%20inspection." target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+<a class="wa-float" href="https://wa.me/27634965466?text=Hello%20SmartBiz%20Fire.%20I%20would%20like%20to%20book%20a%20fire%20safety%20inspection." target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
 
 <script>
 const urgencyMsg = { '1':'within 60 days', '4':'within 30 days', '7':'within 7 days', '10':'within 48 hours (emergency)' };
@@ -105,7 +105,7 @@ document.getElementById('inspectionForm').addEventListener('submit', async funct
     } else {
       show('error', j.detail||'Submission failed. Please WhatsApp us directly.');
     }
-  } catch(err) { show('error','Could not reach our server. Please WhatsApp us directly on +27 67 768 4582.'); }
+  } catch(err) { show('error','Could not reach our server. Please WhatsApp us directly on +27 63 496 5466.'); }
   btn.disabled=false; btn.textContent='Submit Inspection Request →';
   function show(t,m){ res.style.display='block'; res.className='result '+t; res.textContent=m; res.scrollIntoView({behavior:'smooth',block:'nearest'}); }
 });
