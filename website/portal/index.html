@@ -1,183 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Customer Compliance Portal | SmartBiz Fire Safety</title>
-  <meta name="description" content="Manage your property compliance status, equipment register, inspection reports, certificates of compliance, and quotes." />
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Portal | SmartBiz Fire</title>
+  <meta name="description" content="SmartBiz Fire customer portal — view service history, compliance documents and equipment status." />
+  <link rel="canonical" href="https://www.smartbizfire.co.za/portal" />
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 <body>
-  <div class="container">
-    <header>
-      <a href="/" class="brand">
-        <div class="logo">SF</div>
-        <div>
-          <div class="brand-title">SmartBiz Fire Safety</div>
-          <div class="brand-sub">Customer Compliance Portal</div>
-        </div>
-      </a>
-      <nav class="nav-links">
-        <a href="/">Home</a>
-        <a href="/portal" class="active">Portal Overview</a>
-        <a href="/verify">Verify Cert</a>
-        <a href="/book-inspection" class="nav-cta">Book Service</a>
-      </nav>
-      <div>
-        <span class="pill success" id="portal-status-badge">🟢 ALL SITES COMPLIANT</span>
-      </div>
-    </header>
+<nav class="nav"><a class="brand" href="/"><div class="brand-icon">SF</div><div>SMARTBIZ <b>FIRE</b><small>COMPLIANCE · SERVICE · SAFETY</small></div></a><div class="nav-links" id="nav-links"><a href="/">Home</a><a href="/services">Services</a><a href="/compliance">Compliance</a><a href="/about">About</a><a href="/resources">Resources</a><a href="/contact">Contact</a></div><a class="btn red nav-cta" href="/request-quote">Request a Quote</a><button class="nav-mobile-toggle" onclick="document.getElementById('nav-links').classList.toggle('open')">☰</button></nav>
 
-    <!-- Top KPI Grid -->
-    <div class="grid-4" style="margin-top:16px;">
-      <div class="card">
-        <span class="pill">Active Sites</span>
-        <h3 id="stat-sites" style="font-size:26px; margin:10px 0 0; color:var(--text);">2</h3>
-        <p style="font-size:11px; margin-top:4px;">Johannesburg & Sandton</p>
-      </div>
-      <div class="card">
-        <span class="pill">Registered Equipment</span>
-        <h3 id="stat-equipment" style="font-size:26px; margin:10px 0 0; color:var(--accent);">48</h3>
-        <p style="font-size:11px; margin-top:4px;">Extinguishers & Hose Reels</p>
-      </div>
-      <div class="card">
-        <span class="pill">Valid Certificates (COC)</span>
-        <h3 id="stat-certs" style="font-size:26px; margin:10px 0 0; color:var(--success);">3</h3>
-        <p style="font-size:11px; margin-top:4px;">Audit-Ready & Verified</p>
-      </div>
-      <div class="card">
-        <span class="pill">Next Service Due</span>
-        <h3 id="stat-due" style="font-size:22px; margin:10px 0 0; color:var(--accent-2);">12 Oct 2026</h3>
-        <p style="font-size:11px; margin-top:4px;">32 Days Remaining</p>
-      </div>
-    </div>
+<div class="portal-wrap">
+  <p class="eyebrow" style="text-align:center">Customer Portal</p>
+  <h1 style="text-align:center;font-size:clamp(26px,4vw,40px);margin-bottom:8px">Welcome back</h1>
+  <p style="text-align:center;color:var(--muted);margin-bottom:0">Sign in to view your service history, compliance documents and equipment status.</p>
 
-    <!-- Main Portal Content Tabs -->
-    <div class="section-box" style="margin-top:24px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
-        <h2 style="margin:0; font-size:20px;">Property Equipment & Compliance Register</h2>
-        <div style="display:flex; gap:8px;">
-          <a href="/book-inspection" class="btn btn-primary" style="padding:8px 14px; font-size:13px;">+ Request Inspection</a>
-          <a href="/request-quote" class="btn" style="padding:8px 14px; font-size:13px;">Request Quote</a>
-        </div>
-      </div>
-
-      <!-- Equipment Table -->
-      <div style="overflow-x:auto;">
-        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px;">
-          <thead>
-            <tr style="border-bottom:1px solid var(--border); color:var(--muted);">
-              <th style="padding:10px;">QR Identifier</th>
-              <th style="padding:10px;">Equipment Type</th>
-              <th style="padding:10px;">Capacity</th>
-              <th style="padding:10px;">Location On-Site</th>
-              <th style="padding:10px;">Last Serviced</th>
-              <th style="padding:10px;">Next Due</th>
-              <th style="padding:10px;">Status</th>
-            </tr>
-          </thead>
-          <tbody id="equipment-tbody">
-            <tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:10px; font-family:monospace; color:var(--accent);">SB-FE-000184</td>
-              <td style="padding:10px;">DCP Extinguisher</td>
-              <td style="padding:10px;">9.0 kg</td>
-              <td style="padding:10px;">Level 4 - Server Room</td>
-              <td style="padding:10px;">2026-08-15</td>
-              <td style="padding:10px;">2026-08-15</td>
-              <td style="padding:10px;"><span class="pill success">COMPLIANT</span></td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:10px; font-family:monospace; color:var(--accent);">SB-FE-000185</td>
-              <td style="padding:10px;">CO2 Extinguisher</td>
-              <td style="padding:10px;">5.0 kg</td>
-              <td style="padding:10px;">Kitchen Area - Floor 2</td>
-              <td style="padding:10px;">2026-08-15</td>
-              <td style="padding:10px;">2026-08-15</td>
-              <td style="padding:10px;"><span class="pill success">COMPLIANT</span></td>
-            </tr>
-            <tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:10px; font-family:monospace; color:var(--accent);">SB-FE-000186</td>
-              <td style="padding:10px;">Fire Hose Reel</td>
-              <td style="padding:10px;">30 metre</td>
-              <td style="padding:10px;">East Stairwell Ground</td>
-              <td style="padding:10px;">2026-08-15</td>
-              <td style="padding:10px;">2026-08-15</td>
-              <td style="padding:10px;"><span class="pill success">COMPLIANT</span></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- Quotes & Certificates Section -->
-    <div class="grid-2" style="margin-top:20px;">
-      <!-- Certificates -->
-      <div class="card">
-        <h3 style="margin-top:0; font-size:16px; color:var(--accent);">Active Certificates of Compliance</h3>
-        <p style="margin-bottom:12px;">Official statutory compliance certificates for insurers and municipal inspectors.</p>
-        <div id="certs-list" style="display:grid; gap:8px;">
-          <div style="padding:12px; background:rgba(255,255,255,0.04); border-radius:10px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <strong style="font-size:14px; font-family:monospace;">COC-2026-0891</strong>
-              <div style="font-size:12px; color:var(--muted);">Sandton Main Tower · Valid until Aug 2027</div>
-            </div>
-            <a href="/api/v1/documents/1" target="_blank" class="btn" style="padding:6px 10px; font-size:12px;">Download PDF</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- Quotes for Approval -->
-      <div class="card">
-        <h3 style="margin-top:0; font-size:16px; color:var(--accent-2);">Pending Quotations</h3>
-        <p style="margin-bottom:12px;">Review and approve upcoming service quotes with one click.</p>
-        <div id="quotes-list" style="display:grid; gap:8px;">
-          <div style="padding:12px; background:rgba(255,255,255,0.04); border-radius:10px; border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <strong style="font-size:14px; font-family:monospace;">QT-2026-0042</strong>
-              <div style="font-size:12px; color:var(--muted);">Annual Servicing · R 2,553.00 (Incl. VAT)</div>
-            </div>
-            <button class="btn btn-primary" onclick="alert('Quote QT-2026-0042 approved successfully! Our dispatch team is scheduling your technician.')" style="padding:6px 12px; font-size:12px;">Approve Quote</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <footer>
-      <div style="text-align:center; color:var(--muted); font-size:12px;">
-        © 2026 SmartBiz Fire Safety (Pty) Ltd. Reg# 2025/515436/07 · SAQCC-Fire Reg. 22/064.
-      </div>
-    </footer>
+  <div class="login-card" id="loginCard">
+    <h2>Sign In</h2>
+    <p>Enter your credentials to access the portal.</p>
+    <form class="form" id="portalForm" novalidate style="margin-top:0">
+      <label>Email Address *<input name="email" required type="email" placeholder="you@company.co.za" /></label>
+      <label>PIN / Password *<input name="pin" required type="password" placeholder="Enter your PIN or password" /></label>
+      <button class="btn red" type="submit" id="loginBtn" style="width:100%;justify-content:center">Sign In →</button>
+      <div class="result" id="loginResult" style="display:none"></div>
+    </form>
   </div>
 
-  <script>
-    async function loadPortalData() {
-      try {
-        const r = await fetch('/api/v1/equipment');
-        const data = await r.json();
-        if (data.equipment && data.equipment.length > 0) {
-          const tbody = document.getElementById('equipment-tbody');
-          tbody.innerHTML = '';
-          data.equipment.slice(0, 10).forEach(eq => {
-            const tr = document.createElement('tr');
-            tr.style.borderBottom = '1px solid var(--border)';
-            tr.innerHTML = `
-              <td style="padding:10px; font-family:monospace; color:var(--accent);">${eq.qr_code}</td>
-              <td style="padding:10px;">${eq.equipment_type}</td>
-              <td style="padding:10px;">${eq.capacity || '4.5kg'}</td>
-              <td style="padding:10px;">${eq.location_on_site || 'Site Location'}</td>
-              <td style="padding:10px;">${eq.last_service_date || '2026-08-15'}</td>
-              <td style="padding:10px;">${eq.next_service_date || '2027-08-15'}</td>
-              <td style="padding:10px;"><span class="pill ${eq.status === 'COMPLIANT' ? 'success' : 'error'}">${eq.status}</span></td>
-            `;
-            tbody.appendChild(tr);
-          });
-          document.getElementById('stat-equipment').textContent = data.equipment.length;
-        }
-      } catch (e) {
-        // Keeps default demo rows
-      }
+  <div id="welcomeCard" style="display:none;margin-top:24px;text-align:center">
+    <div class="login-card">
+      <div style="font-size:48px;margin-bottom:12px">✓</div>
+      <h2 id="welcomeName">Welcome</h2>
+      <p id="welcomeRole" style="color:var(--muted);margin-bottom:24px"></p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <a class="btn red" href="/technician" style="justify-content:center">Open Technician App →</a>
+        <a class="btn ghost" href="/verify" style="justify-content:center">Verify Certificate</a>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px;padding-top:24px;border-top:1px solid var(--border)">
+    <p class="eyebrow" style="text-align:center;margin-bottom:16px">Quick Links</p>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <a class="btn ghost" href="/book-inspection" style="font-size:13px">Book Inspection</a>
+      <a class="btn ghost" href="/verify" style="font-size:13px">Verify Certificate</a>
+      <a class="btn ghost" href="/contact" style="font-size:13px">Contact Us</a>
+    </div>
+  </div>
+
+  <p style="text-align:center;color:var(--muted);font-size:13px;margin-top:24px">Don't have credentials? <a href="/contact" style="color:var(--red)">Contact SmartBiz Fire</a> to set up your account.</p>
+</div>
+
+<footer style="margin-top:60px">
+  <div class="footer-bottom" style="border-top:1px solid var(--border);padding:32px 8%"><span>© 2026 SmartBiz Fire</span><span>smartbizfire.co.za</span></div>
+</footer>
+<a class="wa-float" href="https://wa.me/27677684582?text=Hello%20SmartBiz%20Fire." target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
+
+<script>
+document.getElementById('portalForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const fd=new FormData(this); const d=Object.fromEntries(fd);
+  const res=document.getElementById('loginResult'); const btn=document.getElementById('loginBtn');
+  btn.disabled=true; btn.textContent='Signing in…';
+  try {
+    const r=await fetch('/api/v1/technicians/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin:d.pin})});
+    const j=await r.json();
+    if(r.ok&&j.ok) {
+      document.getElementById('loginCard').style.display='none';
+      const wc=document.getElementById('welcomeCard');
+      wc.style.display='block';
+      document.getElementById('welcomeName').textContent='Welcome, '+(j.technician?.name||'Technician');
+      document.getElementById('welcomeRole').textContent='Technician account activated.';
+    } else {
+      res.style.display='block'; res.className='result error';
+      res.textContent='Invalid credentials. Contact SmartBiz Fire for your access details.';
     }
-    loadPortalData();
-  </script>
+  } catch(err) {
+    res.style.display='block'; res.className='result error';
+    res.textContent='Customer portal is currently unavailable. Please contact SmartBiz Fire directly.';
+  }
+  btn.disabled=false; btn.textContent='Sign In →';
+});
+</script>
 </body>
 </html>

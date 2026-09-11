@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Sitemap: https://www.smartbizfire.co.za/sitemap.xml
+Disallow: /admin
+Disallow: /technician
+Disallow: /portal
+Disallow: /api/
