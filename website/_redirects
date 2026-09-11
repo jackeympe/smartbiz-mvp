@@ -1,3 +1,4 @@
 # Cloudflare Pages redirects and clean routes for SmartBiz Fire
+/api/v1/*     https://smartbiz-mvp.onrender.com/api/v1/:splat    200
 /admin        /admin.html        200
 /technician   /technician.html   200
