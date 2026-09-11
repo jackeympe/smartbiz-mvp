@@ -56,6 +56,28 @@
   </div>
 </section>
 
+<!-- Quiz -->
+<section class="section reveal" style="background:linear-gradient(135deg, #0B1119 0%, #101923 100%);border-radius:16px;padding:48px 32px">
+  <div class="section-head">
+    <p class="eyebrow">Quick Assessment</p>
+    <h2>Is your business fire compliant?</h2>
+    <p>Answer 8 quick questions to get an instant compliance readiness score.</p>
+  </div>
+  <div id="quiz-container" style="max-width:720px;margin:0 auto">
+    <div id="quiz-progress" style="display:flex;gap:8px;margin-bottom:32px"></div>
+    <form id="complianceQuiz" style="display:none">
+      <div id="quiz-questions"></div>
+      <button type="submit" class="btn red" style="width:100%;margin-top:24px">Get My Score →</button>
+    </form>
+    <div id="quiz-result" style="display:none;text-align:center">
+      <div style="font-size:64px;font-weight:bold;color:var(--red);margin-bottom:16px" id="score-percent">0%</div>
+      <div style="font-size:24px;color:var(--text);margin-bottom:8px;font-weight:600" id="score-label">Assessment Complete</div>
+      <div style="color:var(--muted);margin-bottom:24px;font-size:16px" id="score-desc"></div>
+      <div id="score-action"></div>
+    </div>
+  </div>
+</section>
+
 <!-- FAQ -->
 <section class="section reveal">
   <div class="section-head">
@@ -107,6 +129,107 @@
 const obs=new IntersectionObserver(els=>els.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');obs.unobserve(e.target);}}),{threshold:0.1});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.faq-q').forEach(q=>q.addEventListener('click',()=>q.parentElement.classList.toggle('open')));
+
+// Compliance Quiz
+const quizData = [
+  { q: "Do you have an updated inventory of all fire equipment on site?", hint: "Fire extinguishers, hose reels, detection systems, etc." },
+  { q: "Are all fire extinguishers serviced annually per SANS 10105?", hint: "Last service date should be within 12 months" },
+  { q: "Do you have a current Certificate of Compliance (COC)?", hint: "Required by insurance, landlords, and authorities" },
+  { q: "Are your staff trained on fire safety procedures and equipment use?", hint: "At least annual training recommended" },
+  { q: "Are emergency exits clearly marked and unobstructed?", hint: "Exits must be accessible at all times" },
+  { q: "Do you have a documented fire evacuation plan?", hint: "Plan should be tested and communicated to staff" },
+  { q: "Are fire alarm and detection systems tested regularly?", hint: "Monthly testing recommended" },
+  { q: "Do you track renewal dates and equipment due dates?", hint: "Prevents lapsed compliance and costly delays" }
+];
+
+const form = document.getElementById('complianceQuiz');
+const container = document.getElementById('quiz-container');
+const qDiv = document.getElementById('quiz-questions');
+const progress = document.getElementById('quiz-progress');
+const result = document.getElementById('quiz-result');
+
+let answers = {};
+
+// Build quiz
+quizData.forEach((item, i) => {
+  const q = document.createElement('div');
+  q.style.cssText = 'margin-bottom:32px;padding:20px;background:rgba(31,41,55,0.5);border-radius:12px;border:1px solid var(--border)';
+  q.innerHTML = `
+    <div style="display:flex;gap:12px;margin-bottom:8px;align-items:start">
+      <span style="flex:0 0 auto;width:28px;height:28px;background:var(--red);color:black;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px">${i+1}</span>
+      <label style="flex:1;cursor:pointer;display:flex;gap:12px;align-items:center">
+        <input type="radio" name="q${i}" value="yes" style="width:18px;height:18px;cursor:pointer" />
+        <div>
+          <div style="color:var(--text);font-weight:500;margin-bottom:4px">${item.q}</div>
+          <div style="color:var(--muted);font-size:13px">${item.hint}</div>
+        </div>
+      </label>
+    </div>
+    <label style="display:flex;gap:12px;cursor:pointer;margin-left:40px">
+      <input type="radio" name="q${i}" value="no" style="width:18px;height:18px;cursor:pointer" />
+      <span style="color:var(--muted)">Not yet / Unsure</span>
+    </label>
+  `;
+  qDiv.appendChild(q);
+});
+
+// Build progress dots
+quizData.forEach((_, i) => {
+  const dot = document.createElement('div');
+  dot.id = `dot-${i}`;
+  dot.style.cssText = 'width:12px;height:12px;border-radius:50%;background:var(--border);cursor:pointer;transition:all 0.2s';
+  dot.onclick = () => window.scrollTo({top: qDiv.children[i].offsetTop - 100, behavior: 'smooth'});
+  progress.appendChild(dot);
+});
+
+// Update progress
+form.addEventListener('change', (e) => {
+  const name = e.target.name;
+  const idx = parseInt(name.substring(1));
+  answers[idx] = e.target.value === 'yes' ? 1 : 0;
+  
+  const dot = document.getElementById(`dot-${idx}`);
+  dot.style.background = answers[idx] ? 'var(--red)' : 'var(--green)';
+});
+
+// Submit handler
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  if(Object.keys(answers).length < quizData.length) {
+    alert('Please answer all questions');
+    return;
+  }
+  
+  const score = Math.round((Object.values(answers).reduce((a,b)=>a+b,0) / quizData.length) * 100);
+  
+  let label, desc, action;
+  if(score >= 80) {
+    label = '🟢 Excellent Compliance';
+    desc = 'Your business is well-prepared. Keep up the scheduled maintenance and monitoring.';
+    action = '<a class="btn ghost" href="/contact">Schedule a Verification Inspection</a>';
+  } else if(score >= 60) {
+    label = '🟡 Partially Compliant';
+    desc = 'You\'re on the right track, but there are gaps. We can help you address them quickly.';
+    action = '<a class="btn red" href="/book-inspection">Book an Inspection Now</a>';
+  } else {
+    label = '🔴 Compliance Gaps Detected';
+    desc = 'Your business has significant compliance risks. Let\'s schedule an urgent assessment.';
+    action = '<a class="btn red" href="/request-quote">Get a Compliance Plan</a> or <a class="btn ghost" href="https://wa.me/27634965466?text=I need urgent fire compliance assistance" target="_blank" rel="noopener">WhatsApp Us</a>';
+  }
+  
+  document.getElementById('score-percent').textContent = score + '%';
+  document.getElementById('score-label').textContent = label;
+  document.getElementById('score-desc').textContent = desc;
+  document.getElementById('score-action').innerHTML = action;
+  
+  form.style.display = 'none';
+  progress.style.display = 'none';
+  result.style.display = 'block';
+});
+
+// Show form on load
+form.style.display = 'block';
 </script>
 </body>
 </html>
