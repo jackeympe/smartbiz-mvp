@@ -24,12 +24,6 @@ services:
         sync: false
       - key: PAYFAST_MERCHANT_KEY
         sync: false
-      - key: XERO_CLIENT_ID
-        sync: false
-      - key: XERO_CLIENT_SECRET
-        sync: false
-      - key: XERO_TENANT_ID
-        sync: false
       - key: AGENTMAIL_INBOX_ID
         value: compliance1660@agentmail.to
       - key: AGENTMAIL_API_KEY
