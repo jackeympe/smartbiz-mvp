@@ -5,9 +5,9 @@
 - `SMARBIZ_TECHNICIAN_TOKEN`
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMARTBIZ_EMAIL_TO`
 - `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, `PAYFAST_URL`
-- `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`, `XERO_TENANT_ID`
 - `SMARBIZ_API_URL`
 - `SMARBIZ_SITE_URL`
+- Zoho credentials: configure only in the deployment secret manager after the Zoho integration is implemented.
 
 ## API host
 - Recommended: Render, Fly.io, Railway, Azure Container Apps
@@ -21,9 +21,9 @@
 
 ## Security
 - Use strong admin and technician tokens
-- Restrict `/xero/webhook` source IPs where possible
 - Enable HTTPS on the API host
 - Restrict Cloudflare Pages `SMARBIZ_API_URL` to HTTPS
+- Store all third-party credentials only in the deployment secret manager
 
 ## Cloudflare Pages
 - Project type: Static assets
@@ -36,16 +36,14 @@
 - Enable IPN/notify in PayFast merchant settings
 - Verify merchant key and passphrase
 
-## Xero
-- Create a custom app in Xero developer portal
-- Grant `accounting.transactions` scope
-- Set redirect URI if using OAuth2 authorization code flow
-- Note: current integration uses client credentials where supported
+## Zoho
+- Zoho is the accounting/business-operations replacement for the cancelled Xero integration.
+- Implement Zoho through a dedicated integration module with credentials supplied through the deployment secret manager.
+- Do not store Zoho secrets in source control or `.env.example`.
 
 ## Verification
 - `/health` returns `{"status": "ok"}`
 - `/api/v1/status` returns counts
-- `/xero/health` returns `{"ok": true/false}`
 
 ## Monitoring
 - Watch API logs for 4xx/5xx spikes
