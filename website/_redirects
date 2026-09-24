@@ -2,3 +2,14 @@
 /api/v1/*     https://smartbiz-mvp.onrender.com/api/v1/:splat    200
 /admin        /admin.html        200
 /technician   /technician.html   200
+/services/fire-extinguishers   /services/fire-extinguishers/   301
+/services/fire-compliance     /services/fire-compliance/     301
+/services/fire-inspections    /services/fire-inspections/    301
+/services/fire-risk-assessment /services/fire-risk-assessment/ 301
+/services/fire-hose-reel-servicing /services/fire-hose-reel-servicing/ 301
+/services/fire-hydrant-servicing /services/fire-hydrant-servicing/ 301
+/services/fire-equipment      /services/fire-equipment/      301
+/locations/gauteng            /locations/gauteng/            301
+/locations/johannesburg       /locations/johannesburg/       301
+/locations/pretoria           /locations/pretoria/           301
+/locations/tembisa            /locations/tembisa/            301
