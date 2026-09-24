@@ -29,6 +29,6 @@ services:
       - key: AGENTMAIL_API_KEY
         sync: false
       - key: WHATSAPP_NUMBER
-        value: "0677684582"
-      - key: SMARBIZ_API_URL
+        value: "+27634965466"
+      - key: SMARTBIZ_API_URL
         sync: false

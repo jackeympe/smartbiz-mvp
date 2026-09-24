@@ -37,7 +37,7 @@
 - Verify merchant key and passphrase
 
 ## Zoho
-- Zoho is the accounting/business-operations replacement for the cancelled Xero integration.
+- Zoho provides the accounting and business-operations integration for SmartBiz Fire.
 - Implement Zoho through a dedicated integration module with credentials supplied through the deployment secret manager.
 - Do not store Zoho secrets in source control or `.env.example`.
 

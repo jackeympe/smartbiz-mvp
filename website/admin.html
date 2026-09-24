@@ -162,7 +162,7 @@
   </div>
 
   <script>
-    const API_BASE = (typeof SMARBIZ_API_URL !== 'undefined' && SMARBIZ_API_URL) ? SMARBIZ_API_URL.replace(/\/$/, '') : '';
+    const API_BASE = (typeof SMARTBIZ_API_URL !== 'undefined' && SMARTBIZ_API_URL) ? SMARTBIZ_API_URL.replace(/\/$/, '') : '';
     const IS_PROD = API_BASE !== '';
     const FALLBACK_LOCAL = 'http://localhost:8000';
     const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || '';
@@ -288,7 +288,7 @@
         rows.forEach(b => {
           const tr = document.createElement('tr');
           tr.innerHTML = `<td>${b.id}</td><td>${b.first_name} ${b.last_name}</td><td>${b.service}</td><td>${(b.amount_cents||0)/100} ${b.currency}</td><td><span class="badge">${b.status}</span></td>` +
-            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="pdf" data-id="${b.id}">PDF</button> <button class="btn" data-action="xero-contact" data-id="${b.id}">Xero Contact</button> <button class="btn" data-action="xero-invoice" data-id="${b.id}">Xero Invoice</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button> <button class="btn" data-action="admin-update" data-id="${b.id}">Admin Update</button> <button class="btn" data-action="history" data-id="${b.id}">History</button></td>`;
+            `<td><button class="btn" data-action="qr" data-id="${b.id}">QR</button> <button class="btn" data-action="pdf" data-id="${b.id}">PDF</button> <button class="btn" data-action="refund" data-id="${b.id}">Refund</button> <button class="btn" data-action="admin-update" data-id="${b.id}">Admin Update</button> <button class="btn" data-action="history" data-id="${b.id}">History</button></td>`;
           tbody.appendChild(tr);
         });
         setMsg('bookings-msg', rows.length ? `Loaded ${rows.length} bookings` : 'No bookings match your search.');
@@ -436,22 +436,6 @@
           loadBookings();
         } else {
           setMsg('bookings-msg', data.detail || 'Refund failed.', 'err');
-        }
-      } else if (action === 'xero-contact') {
-        const r = await request('/xero/bookings/' + id + '/contact', { method: 'POST' });
-        const data = await r.json();
-        if (r.ok) {
-          setMsg('bookings-msg', 'Xero contact synced.', 'ok');
-        } else {
-          setMsg('bookings-msg', data.detail || 'Xero contact failed.', 'err');
-        }
-      } else if (action === 'xero-invoice') {
-        const r = await request('/xero/bookings/' + id + '/invoice', { method: 'POST' });
-        const data = await r.json();
-        if (r.ok) {
-          setMsg('bookings-msg', 'Xero invoice created.', 'ok');
-        } else {
-          setMsg('bookings-msg', data.detail || 'Xero invoice failed.', 'err');
         }
       } else if (action === 'admin-update') {
         const status = prompt('New status?') || '';

@@ -1,0 +1,39 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartbiz-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smartbiz
+      POSTGRES_USER: smartbiz
+      POSTGRES_PASSWORD: change-this-production-password
+    volumes:
+      - smartbiz_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartbiz -d smartbiz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: smartbiz-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /app/data/smartbiz.sqlite
+      API_URL: https://smartbizfire.co.za
+      NEXT_PUBLIC_APP_URL: https://smartbizfire.co.za
+      WHATSAPP_NUMBER: "+27634965466"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./smartbiz.sqlite:/app/data/smartbiz.sqlite
+
+volumes:
+  smartbiz_postgres:

@@ -64,7 +64,7 @@ def test_app_status():
     assert "counts" in body
     assert "checks" in body
     assert "db" in body["checks"]
-    assert "xero" in body["checks"]
+    assert "accounting" in body["checks"]
     assert "smtp" in body["checks"]
 
 def test_create_lead_persists_and_lists():
@@ -198,26 +198,6 @@ def test_refund_window_enforced():
     assert booking["status"] == "refunded"
     assert booking["payfast_status"] == "refunded"
 
-def test_xero_not_configured():
-    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
-    booking_id = r.json()["booking_id"]
-
-    for path in [
-        f"/xero/bookings/{booking_id}/contact",
-        f"/xero/bookings/{booking_id}/invoice",
-        f"/xero/bookings/{booking_id}/creditnote",
-    ]:
-        resp = client.post(path, headers={"x-smartbiz-token": "dev"})
-        assert resp.status_code == 400
-        assert "not configured" in resp.json()["detail"]
-
-def test_xero_health_reports_config():
-    r = client.get("/xero/health", headers={"x-smartbiz-token": "dev"})
-    assert r.status_code == 200
-    body = r.json()
-    assert "ok" in body
-    assert isinstance(body["ok"], bool)
-
 def test_booking_pdf_document():
     r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
     booking_id = r.json()["booking_id"]
@@ -271,18 +251,6 @@ def test_payfast_status_update():
 
     booking = client.get(f"/api/v1/bookings/{booking_id}/public").json()
     assert booking["payfast_status"] == "paid"
-
-def test_xero_webhook_updates_booking_status():
-    r = client.post("/api/v1/bookings", json=FIXTURES["booking"], headers={"x-smartbiz-token": "dev"})
-    booking_id = r.json()["booking_id"]
-    paid = client.post("/xero/webhook", json={"event_type": "INVOICE.PAID", "resource": {"booking_id": str(booking_id)}})
-    assert paid.status_code == 200
-    assert paid.json()["event"] == "invoice.paid"
-    assert client.get(f"/api/v1/bookings/{booking_id}/public").json()["status"] == "paid"
-
-    refunded = client.post("/xero/webhook", json={"event_type": "CREDITNOTE.CREATED", "resource": {"booking_id": str(booking_id)}})
-    assert refunded.status_code == 200
-    assert client.get(f"/api/v1/bookings/{booking_id}/public").json()["status"] == "refunded"
 
 def test_end_to_end_quiz_booking_completion_pdf():
     answers = FIXTURES["quiz_answers"]
@@ -476,10 +444,56 @@ def test_confirm_booking_404_for_missing():
 def test_smtp_test_endpoint_requires_admin_token():
     r = client.post("/api/v1/smtp-test")
     assert r.status_code == 401
-    r = client.post("/api/v1/smtp-test", headers={"x-smartbiz-token": "dev"})
-    if os.environ.get("SMTP_HOST") and os.environ.get("SMTP_PORT") and os.environ.get("SMTP_USER") and os.environ.get("SMTP_PASS") and os.environ.get("SMARBIZ_EMAIL_TO"):
-        assert r.status_code == 200
-        assert r.json()["ok"] is True
-    else:
-        assert r.status_code == 400
-        assert r.json()["ok"] is False
+
+    r = client.post(
+        "/api/v1/smtp-test",
+        headers={"x-smartbiz-token": "dev"},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+def test_accounting_provider_is_zoho():
+    from smartbiz.services.accounting_service import get_accounting_provider
+    from smartbiz.services.zoho_books_service import ZohoBooksProvider
+
+    provider = get_accounting_provider()
+    assert isinstance(provider, ZohoBooksProvider)
+
+
+def test_accounting_provider_not_configured_without_credentials(monkeypatch):
+    for key in [
+        "ZOHO_CLIENT_ID",
+        "ZOHO_CLIENT_SECRET",
+        "ZOHO_REFRESH_TOKEN",
+        "ZOHO_ORGANIZATION_ID",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+
+    from smartbiz.services.zoho_books_service import ZohoBooksProvider
+
+    provider = ZohoBooksProvider()
+    assert provider.configured() is False
+
+
+def test_accounting_provider_is_zoho():
+    from smartbiz.services.accounting_service import get_accounting_provider
+    from smartbiz.services.zoho_books_service import ZohoBooksProvider
+
+    provider = get_accounting_provider()
+    assert isinstance(provider, ZohoBooksProvider)
+
+
+def test_accounting_provider_not_configured_without_credentials(monkeypatch):
+    for key in [
+        "ZOHO_CLIENT_ID",
+        "ZOHO_CLIENT_SECRET",
+        "ZOHO_REFRESH_TOKEN",
+        "ZOHO_ORGANIZATION_ID",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+
+    from smartbiz.services.zoho_books_service import ZohoBooksProvider
+
+    provider = ZohoBooksProvider()
+    assert provider.configured() is False

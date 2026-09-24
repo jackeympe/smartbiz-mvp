@@ -26,12 +26,9 @@
 - `SMARTBIZ_EMAIL_TO` = recipient for notifications
 - `PAYFAST_MERCHANT_ID` = PayFast merchant id
 - `PAYFAST_MERCHANT_KEY` = PayFast merchant key
-- `XERO_CLIENT_ID` = `EE092CA6A9EF41ABB38629D754A9526F`
-- `XERO_CLIENT_SECRET` = your Xero client secret
-- `XERO_TENANT_ID` = `78C3A293-8B24-441A-893E-812B3E8CBE0A`
 - `AGENTMAIL_INBOX_ID` = `compliance1660@agentmail.to`
 - `AGENTMAIL_API_KEY` = your AgentMail API key
-- `WHATSAPP_NUMBER` = `0677684582`
+- `WHATSAPP_NUMBER` = `+27634965466`
 - `SMARBIZ_API_URL` = your Render service URL after first deploy
 
 ## After deploy
@@ -41,3 +38,10 @@
   curl https://<render-url>/api/v1/status
   curl -X POST https://<render-url>/api/v1/smtp-test -H 'x-smartbiz-token: dev' -H 'Content-Type: application/json' -d '{"to":"you@example.com"}'
   ```
+
+## Accounting Integration
+
+SmartBiz Fire uses Zoho as its accounting provider behind the provider-neutral accounting integration boundary.
+
+Configure Zoho credentials through the deployment platform's secret manager. Do not commit OAuth client secrets, authorization codes, access tokens, or refresh tokens to the repository.
+
