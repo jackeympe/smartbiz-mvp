@@ -1,169 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.4">
   <!-- SmartBiz Fire Website Sitemap -->
-  <!-- Generated on 2026-09-11 -->
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>1.0</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/services</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.9</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/compliance</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.9</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/about</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/resources</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/contact</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.8</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/book-inspection</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.9</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/request-quote</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.8</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/portal</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.6</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/privacy</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.3</priority>
-    <changefreq>yearly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/terms</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.3</priority>
-    <changefreq>yearly</changefreq>
-  </url>
-  
-  <!-- Services detail pages -->
-  <url>
-    <loc>https://www.smartbizfire.co.za/services/fire-extinguishers</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.7</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/services/fire-equipment</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.7</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/services/fire-inspections</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.7</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/services/fire-compliance</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.7</priority>
-    <changefreq>weekly</changefreq>
-  </url>
-  
-  <!-- Industries -->
-  <url>
-    <loc>https://www.smartbizfire.co.za/industries/restaurants</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/industries/offices</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/industries/warehouses</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/industries/factories</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/industries/schools</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/industries/retail</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.5</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <!-- Utilities -->
-  <url>
-    <loc>https://www.smartbizfire.co.za/verify</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.4</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  
-  <url>
-    <loc>https://www.smartbizfire.co.za/technician</loc>
-    <lastmod>2026-09-11T00:00:00+00:00</lastmod>
-    <priority>0.4</priority>
-    <changefreq>monthly</changefreq>
-  </url>
+  <!-- Updated 2026-09-24 -->
+  <url><loc>https://www.smartbizfire.co.za/</loc><lastmod>2026-09-24T00:00:00+00:00</lastmod><priority>1.0</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/fire-protection-services/</loc><lastmod>2026-09-24T00:00:00+00:00</lastmod><priority>1.0</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/services</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/compliance</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/about</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.8</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/resources</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.8</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/contact</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/book-inspection</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/request-quote</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.8</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/privacy</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.3</priority><changefreq>yearly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/terms</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.3</priority><changefreq>yearly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/services/fire-extinguishers</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.7</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/services/fire-equipment</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.7</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/services/fire-inspections</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.7</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/services/fire-compliance</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.7</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/industries/restaurants</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/industries/offices</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/industries/warehouses</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/industries/factories</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/industries/schools</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/industries/retail</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.5</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://www.smartbizfire.co.za/verify</loc><lastmod>2026-09-11T00:00:00+00:00</lastmod><priority>0.4</priority><changefreq>monthly</changefreq></url>
 </urlset>
