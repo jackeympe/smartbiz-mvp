@@ -10,6 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib import colors
 from smartbiz.db import get_connection, db_lock
+from smartbiz.services.certificate_service import issue_certificate
 
 DEFAULT_INSPECTION_CHECKLIST = [
     {"id": "chk_ext_access", "item": "Fire extinguishers unobstructed and clearly mounted with signage", "category": "Extinguishers", "status": "PASS", "severity": "HIGH"},
@@ -78,28 +79,73 @@ def complete_inspection(
     recommendations: str = "Maintain quarterly visual checks.",
     signature_url: str = "",
 ) -> Dict[str, Any]:
-    """Records the completed checklist and computes compliance score."""
+    """Completes an inspection and automatically issues its COC."""
     total_items = len(checklist_results)
-    passed_items = sum(1 for item in checklist_results if item.get("status", "").upper() == "PASS")
-    score = int(round((passed_items / total_items) * 100)) if total_items > 0 else 100
+    passed_items = sum(
+        1 for item in checklist_results
+        if item.get("status", "").upper() == "PASS"
+    )
+    score = int(round((passed_items / total_items) * 100)) if total_items else 100
     now_iso = datetime.now(timezone.utc).isoformat()
 
+    # First complete the inspection.
     with db_lock, get_connection() as con:
+        inspection = con.execute(
+            """
+            SELECT i.id, i.site_id, s.customer_id
+            FROM inspections i
+            LEFT JOIN sites s ON s.id = i.site_id
+            WHERE i.id = ?
+            """,
+            (inspection_id,),
+        ).fetchone()
+
+        if not inspection:
+            raise ValueError(f"Inspection {inspection_id} not found")
+
+        customer_id = inspection["customer_id"]
+        site_id = inspection["site_id"]
+
         con.execute(
             """
             UPDATE inspections
-            SET status = 'COMPLETED', overall_score = ?, checklist_data = ?,
-                findings_summary = ?, recommendations = ?, signature_url = ?, completed_at = ?
+            SET status = 'COMPLETED',
+                overall_score = ?,
+                checklist_data = ?,
+                findings_summary = ?,
+                recommendations = ?,
+                signature_url = ?,
+                completed_at = ?
             WHERE id = ?
             """,
             (
-                score, json.dumps(checklist_results), findings_summary,
-                recommendations, signature_url, now_iso, inspection_id
-            )
+                score,
+                json.dumps(checklist_results),
+                findings_summary,
+                recommendations,
+                signature_url,
+                now_iso,
+                inspection_id,
+            ),
         )
         con.commit()
 
-    return get_inspection(inspection_id)
+    # Automatically issue exactly one COC for this inspection.
+    certificate = issue_certificate(
+        customer_id=customer_id,
+        site_id=site_id,
+        inspection_id=inspection_id,
+        scope="Fire Safety Equipment & Annual Compliance Inspection",
+        validity_days=365,
+    )
+
+    result = get_inspection(inspection_id)
+
+    if not result:
+        raise ValueError(f"Inspection {inspection_id} disappeared after completion")
+
+    result["certificate"] = certificate
+    return result
 
 def generate_inspection_report_pdf(inspection_id: int) -> bytes:
     """Generates comprehensive inspection report PDF."""

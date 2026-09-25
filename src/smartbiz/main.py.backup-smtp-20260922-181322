@@ -8,7 +8,6 @@ from starlette.routing import Route
 from starlette.requests import Request
 from starlette.background import BackgroundTask
 import sqlite3
-from smartbiz.services.inspection_service import get_inspection as service_get_inspection
 import threading
 from datetime import datetime, timezone, timedelta
 import hmac
@@ -60,7 +59,7 @@ class SimpleTokenMiddleware(BaseHTTPMiddleware):
             })
         path = request.url.path
         # Admin-only paths
-        if path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads", "/api/v1/export", "/api/v1/inspections")):
+        if path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads", "/api/v1/export")):
             if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
                 return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
         # Technician-only paths
@@ -232,28 +231,6 @@ def init_db() -> None:
         )
         con.execute(
             """
-            CREATE TABLE IF NOT EXISTS inspections (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                booking_id INTEGER NOT NULL,
-                technician_id INTEGER,
-                status TEXT NOT NULL DEFAULT 'pending',
-                checklist TEXT NOT NULL DEFAULT '{}',
-                findings TEXT NOT NULL DEFAULT '',
-                notes TEXT NOT NULL DEFAULT '',
-                evidence_photo_url TEXT NOT NULL DEFAULT '',
-                started_at TEXT NOT NULL DEFAULT '',
-                completed_at TEXT NOT NULL DEFAULT '',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (booking_id) REFERENCES bookings(id),
-                FOREIGN KEY (technician_id) REFERENCES technicians(id)
-            )
-            """
-        )
-
-
-        con.execute(
-            """
             CREATE TABLE IF NOT EXISTS request_logs (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               method TEXT NOT NULL,
@@ -353,17 +330,11 @@ def _send_email(subject: str, body: str, to_addr: str | None = None) -> None:
         msg["From"] = user
         msg["To"] = to_addr
         try:
-            if int(port) == 465:
-                with smtplib.SMTP_SSL(host, int(port), timeout=20) as s:
-                    s.login(user, password)
-                    s.send_message(msg)
-                    return
-            else:
-                with smtplib.SMTP(host, int(port), timeout=20) as s:
-                    s.starttls()
-                    s.login(user, password)
-                    s.send_message(msg)
-                    return
+            with smtplib.SMTP(host, port, timeout=20) as s:
+                s.starttls()
+                s.login(user, password)
+                s.send_message(msg)
+                return
         except Exception:
             pass
     if AGENTMAIL_API_KEY and AGENTMAIL_INBOX_ID and to_addr:
@@ -1021,315 +992,6 @@ async def list_technicians(request: Request) -> JSONResponse:
         data = [dict(r) for r in rows]
     return JSONResponse({"technicians": data})
 
-
-async def create_booking_inspection(request: Request) -> JSONResponse:
-    booking_id = int(request.path_params["booking_id"])
-
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-
-    now = _now_iso()
-
-    with lock, sqlite3.connect(DB_PATH) as con:
-        con.row_factory = sqlite3.Row
-
-        booking = con.execute(
-            """
-            SELECT id, status, assigned_technician_id
-            FROM bookings
-            WHERE id = ?
-            """,
-            (booking_id,),
-        ).fetchone()
-
-        if not booking:
-            return _json_error("booking not found", 404)
-
-        existing = con.execute(
-            """
-            SELECT *
-            FROM inspections
-            WHERE booking_id = ?
-              AND status NOT IN ('completed', 'cancelled')
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (booking_id,),
-        ).fetchone()
-
-        if existing:
-            return JSONResponse({
-                "ok": True,
-                "inspection": dict(existing),
-                "existing": True,
-            })
-
-        technician_id = payload.get(
-            "technician_id",
-            booking["assigned_technician_id"] or None,
-        )
-
-        checklist = payload.get("checklist", {})
-        if not isinstance(checklist, dict):
-            return _json_error("checklist must be an object", 400)
-
-        con.execute(
-            """
-            INSERT INTO inspections (
-                booking_id,
-                technician_id,
-                status,
-                checklist,
-                findings,
-                notes,
-                evidence_photo_url,
-                started_at,
-                completed_at,
-                created_at,
-                updated_at
-            )
-            VALUES (?, ?, 'pending', ?, '', '', '', '', '', ?, ?)
-            """,
-            (
-                booking_id,
-                technician_id,
-                json.dumps(checklist),
-                now,
-                now,
-            ),
-        )
-
-        inspection_id = con.execute(
-            "SELECT last_insert_rowid()"
-        ).fetchone()[0]
-
-        con.execute(
-            """
-            INSERT INTO job_events (
-                job_id,
-                event_type,
-                detail,
-                created_at
-            )
-            VALUES (?, 'inspection_created', ?, ?)
-            """,
-            (
-                booking_id,
-                f"inspection_id={inspection_id}",
-                now,
-            ),
-        )
-
-        con.commit()
-
-        row = con.execute(
-            "SELECT * FROM inspections WHERE id = ?",
-            (inspection_id,),
-        ).fetchone()
-
-    return JSONResponse({
-        "ok": True,
-        "inspection": dict(row),
-        "existing": False,
-    }, status_code=201)
-
-
-async def get_inspection(request: Request) -> JSONResponse:
-    inspection_id = int(request.path_params["inspection_id"])
-
-    inspection = service_get_inspection(inspection_id)
-
-    if not inspection:
-        return _json_error("inspection not found", 404)
-
-    return JSONResponse({
-        "inspection": inspection
-    })
-
-async def update_inspection(request: Request) -> JSONResponse:
-    inspection_id = int(request.path_params["inspection_id"])
-
-    try:
-        payload = await request.json()
-    except Exception:
-        return _json_error("invalid JSON", 400)
-
-    allowed = {
-        "status",
-        "technician_id",
-        "checklist",
-        "findings",
-        "notes",
-        "evidence_photo_url",
-        "started_at",
-    }
-
-    updates = {}
-
-    for key in allowed:
-        if key not in payload:
-            continue
-
-        value = payload[key]
-
-        if key == "checklist":
-            if not isinstance(value, dict):
-                return _json_error("checklist must be an object", 400)
-            value = json.dumps(value)
-
-        updates[key] = value
-
-    if not updates:
-        return _json_error("no inspection fields supplied", 400)
-
-    updates["updated_at"] = _now_iso()
-
-    with lock, sqlite3.connect(DB_PATH) as con:
-        con.row_factory = sqlite3.Row
-
-        inspection = con.execute(
-            """
-            SELECT *
-            FROM inspections
-            WHERE id = ?
-            """,
-            (inspection_id,),
-        ).fetchone()
-
-        if not inspection:
-            return _json_error("inspection not found", 404)
-
-        columns = []
-        values = []
-
-        for key, value in updates.items():
-            columns.append(f"{key} = ?")
-            values.append(value)
-
-        values.append(inspection_id)
-
-        con.execute(
-            f"""
-            UPDATE inspections
-            SET {", ".join(columns)}
-            WHERE id = ?
-            """,
-            values,
-        )
-
-        con.execute(
-            """
-            INSERT INTO job_events (
-                job_id,
-                event_type,
-                detail,
-                created_at
-            )
-            VALUES (?, 'inspection_updated', ?, ?)
-            """,
-            (
-                inspection["booking_id"],
-                f"inspection_id={inspection_id}",
-                _now_iso(),
-            ),
-        )
-
-        con.commit()
-
-        row = con.execute(
-            """
-            SELECT *
-            FROM inspections
-            WHERE id = ?
-            """,
-            (inspection_id,),
-        ).fetchone()
-
-    result = dict(row)
-
-    try:
-        result["checklist"] = json.loads(
-            result.get("checklist") or "{}"
-        )
-    except Exception:
-        result["checklist"] = {}
-
-    return JSONResponse({
-        "ok": True,
-        "inspection": result,
-    })
-
-
-async def complete_inspection(request: Request) -> JSONResponse:
-    """Complete an inspection using the canonical inspection service."""
-    inspection_id = int(request.path_params["inspection_id"])
-
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-
-    checklist_results = payload.get("checklist_results")
-
-    # Support the newer checklist payload while also allowing
-    # a simple checklist object for API compatibility.
-    if checklist_results is None:
-        checklist = payload.get("checklist")
-        if isinstance(checklist, dict):
-            checklist_results = [
-                {
-                    "id": key,
-                    "item": key.replace("_", " ").title(),
-                    "status": (
-                        "PASS"
-                        if value is True or str(value).upper() in ("PASS", "GOOD", "NORMAL", "INTACT", "VISIBLE")
-                        else str(value).upper()
-                    ),
-                }
-                for key, value in checklist.items()
-            ]
-        elif isinstance(checklist, list):
-            checklist_results = checklist
-        else:
-            checklist_results = []
-
-    if not isinstance(checklist_results, list):
-        return _json_error("checklist_results must be an array", 400)
-
-    from smartbiz.services.inspection_service import complete_inspection as service_complete_inspection
-
-    try:
-        result = service_complete_inspection(
-            inspection_id=inspection_id,
-            checklist_results=checklist_results,
-            findings_summary=payload.get(
-                "findings_summary",
-                payload.get("findings", "All equipment inspected and operational.")
-            ),
-            recommendations=payload.get(
-                "recommendations",
-                payload.get("notes", "Maintain routine fire-safety checks.")
-            ),
-            signature_url=payload.get(
-                "signature_url",
-                payload.get("evidence_photo_url", "")
-            ),
-        )
-    except ValueError as exc:
-        return _json_error(str(exc), 400)
-    except Exception as exc:
-        return _json_error(f"inspection completion failed: {exc}", 500)
-
-    return JSONResponse({
-        "ok": True,
-        "inspection": result,
-        "next": {
-            "inspection": f"/api/v1/inspections/{inspection_id}"
-        },
-    })
-
 async def assign_technician(request: Request) -> JSONResponse:
     if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
         return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
@@ -1745,7 +1407,6 @@ app = Starlette(
         Route("/bookings/{booking_id}/payfast-status", payfast_status_update, methods=["POST"]),
         Route("/api/v1/bookings/{booking_id}", update_booking, methods=["PATCH"]),
         Route("/api/v1/bookings/{booking_id}/assign", assign_technician, methods=["POST"]),
-        Route("/api/v1/bookings/{booking_id}/inspection", create_booking_inspection, methods=["POST"]),
         Route("/api/v1/bookings/{booking_id}/history", booking_history, methods=["GET"]),
         Route("/api/v1/export/all", export_all, methods=["GET"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),

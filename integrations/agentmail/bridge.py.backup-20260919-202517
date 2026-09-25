@@ -1,0 +1,566 @@
+import os
+import time
+import json
+import requests
+import subprocess
+import shutil
+from pathlib import Path
+
+
+# ============================================================
+# OPENCLAW
+# ============================================================
+
+OPENCLAW_BIN = os.getenv("OPENCLAW_BIN", "openclaw")
+
+if not os.path.isfile(OPENCLAW_BIN):
+    resolved = shutil.which(OPENCLAW_BIN)
+    if resolved:
+        OPENCLAW_BIN = resolved
+    else:
+        raise RuntimeError(f"OpenClaw binary not found: {OPENCLAW_BIN}")
+
+
+# ============================================================
+# AGENTMAIL
+# ============================================================
+
+API = "https://api.agentmail.to/v0"
+
+INBOX = os.environ["AGENTMAIL_INBOX"]
+KEY = os.environ["AGENTMAIL_API_KEY"]
+
+headers = {
+    "Authorization": f"Bearer {KEY}"
+}
+
+
+# ============================================================
+# DISCORD ROUTING
+# ============================================================
+
+DEFAULT_CHANNEL = os.environ["OPENCLAW_DISCORD_CHANNEL"]
+
+CHANNELS = {
+    "control": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_CONTROL",
+        DEFAULT_CHANNEL,
+    ),
+    "compliance": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_COMPLIANCE",
+    ),
+    "tenders": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_TENDERS",
+    ),
+    "finance": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_FINANCE",
+    ),
+    "marketing": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_MARKETING",
+    ),
+    "approvals": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_APPROVALS",
+    ),
+    "system": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_SYSTEM",
+    ),
+    "security": os.getenv(
+        "OPENCLAW_DISCORD_FIRE_SECURITY",
+    ),
+}
+
+
+# ============================================================
+# ROUTING PATTERNS
+# ============================================================
+
+SECURITY_PATTERNS = [
+    "otp",
+    "one-time password",
+    "one time password",
+    "verification code",
+    "verify your email",
+    "verify your email address",
+    "verify email",
+    "password reset",
+    "reset your password",
+    "sign in",
+    "signin",
+    "login",
+    "authentication",
+    "security alert",
+    "security code",
+    "two-factor",
+    "two factor",
+    "2fa",
+]
+
+TENDER_PATTERNS = [
+    "tender",
+    "rfq",
+    "rfi",
+    "rfp",
+    "request for quotation",
+    "request for proposal",
+    "quotation request",
+    "bid invitation",
+    "bid request",
+    "procurement",
+    "expression of interest",
+    "eoi",
+]
+
+COMPLIANCE_PATTERNS = [
+    "certificate of compliance",
+    "compliance",
+    "fire inspection",
+    "inspection",
+    "fire extinguisher",
+    "fire extinguishers",
+    "hose reel",
+    "hose reels",
+    "hydrant",
+    "hydrants",
+    "sprinkler",
+    "fire safety",
+    "safety inspection",
+    "coc",
+]
+
+FINANCE_PATTERNS = [
+    "invoice",
+    "statement",
+    "payment",
+    "payment received",
+    "payment reminder",
+    "overdue",
+    "receipt",
+    "remittance",
+    "purchase order",
+    "purchase order number",
+    "po number",
+    "accounts payable",
+    "accounts receivable",
+]
+
+MARKETING_PATTERNS = [
+    "newsletter",
+    "unsubscribe",
+    "marketing",
+    "campaign",
+    "promotion",
+    "promotional",
+    "special offer",
+]
+
+APPROVAL_PATTERNS = [
+    "approval required",
+    "approve",
+    "approval",
+    "authorization required",
+    "authorisation required",
+    "authorise",
+    "authorize",
+    "sign off",
+    "sign-off",
+]
+
+SYSTEM_PATTERNS = [
+    "delivery failure",
+    "delivery status notification",
+    "undelivered mail",
+    "mail delivery subsystem",
+    "mailer-daemon",
+    "mail delivery failed",
+    "returned to sender",
+    "bounce",
+    "cloudflare",
+    "email routing",
+]
+
+
+# ============================================================
+# STATE / QUARANTINE
+# ============================================================
+
+STATE_FILE = Path("integrations/agentmail/.state.json")
+QUARANTINE_FILE = Path(
+    "integrations/agentmail/.quarantine.jsonl"
+)
+
+
+def load_state():
+    if STATE_FILE.exists():
+        try:
+            return json.loads(STATE_FILE.read_text())
+        except Exception:
+            print(
+                "WARNING: state file could not be read; "
+                "starting with empty state.",
+                flush=True,
+            )
+
+    return {
+        "initialized": False,
+        "seen": [],
+        "routes": {},
+    }
+
+
+def save_state(state):
+    temp_file = STATE_FILE.with_suffix(".tmp")
+
+    temp_file.write_text(
+        json.dumps(
+            state,
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
+
+    temp_file.replace(STATE_FILE)
+
+
+def quarantine(message, reason):
+    QUARANTINE_FILE.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    record = {
+        "timestamp": time.strftime(
+            "%Y-%m-%dT%H:%M:%S%z"
+        ),
+        "reason": reason,
+        "message_id": message.get("message_id"),
+        "from": message.get("from"),
+        "subject": message.get("subject"),
+    }
+
+    with QUARANTINE_FILE.open(
+        "a",
+        encoding="utf-8",
+    ) as f:
+        f.write(
+            json.dumps(
+                record,
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
+
+
+# ============================================================
+# AGENTMAIL
+# ============================================================
+
+def get_messages():
+    response = requests.get(
+        f"{API}/inboxes/{INBOX}/messages",
+        headers=headers,
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    return response.json().get(
+        "messages",
+        [],
+    )
+
+
+# ============================================================
+# CLASSIFICATION
+# ============================================================
+
+def classify_message(message):
+    subject = str(
+        message.get("subject", "")
+    )
+
+    preview = str(
+        message.get("preview", "")
+    )
+
+    sender = str(
+        message.get("from", "")
+    )
+
+    searchable = (
+        f"{subject}\n"
+        f"{preview}\n"
+        f"{sender}"
+    ).lower()
+
+    # SECURITY MUST HAVE HIGHEST PRIORITY.
+    if any(
+        pattern in searchable
+        for pattern in SECURITY_PATTERNS
+    ):
+        return "security"
+
+    if any(
+        pattern in searchable
+        for pattern in TENDER_PATTERNS
+    ):
+        return "tenders"
+
+    if any(
+        pattern in searchable
+        for pattern in COMPLIANCE_PATTERNS
+    ):
+        return "compliance"
+
+    if any(
+        pattern in searchable
+        for pattern in FINANCE_PATTERNS
+    ):
+        return "finance"
+
+    if any(
+        pattern in searchable
+        for pattern in MARKETING_PATTERNS
+    ):
+        return "marketing"
+
+    if any(
+        pattern in searchable
+        for pattern in APPROVAL_PATTERNS
+    ):
+        return "approvals"
+
+    if any(
+        pattern in searchable
+        for pattern in SYSTEM_PATTERNS
+    ):
+        return "system"
+
+    return "control"
+
+
+# ============================================================
+# DISCORD
+# ============================================================
+
+def send_to_discord(message, route):
+    channel = CHANNELS.get(route)
+
+    sender = message.get(
+        "from",
+        "Unknown",
+    )
+
+    subject = message.get(
+        "subject",
+        "(no subject)",
+    )
+
+    preview = message.get(
+        "preview",
+        "",
+    )
+
+    message_id = message.get(
+        "message_id",
+        "unknown",
+    )
+
+    # --------------------------------------------------------
+    # SECURITY ROUTE
+    #
+    # Never expose security/OTP content in normal operations.
+    # If no dedicated security channel exists, quarantine it.
+    # --------------------------------------------------------
+
+    if route == "security":
+        if not channel:
+            quarantine(
+                message,
+                "security message; "
+                "no security Discord channel configured",
+            )
+
+            print(
+                f"QUARANTINED SECURITY MESSAGE: "
+                f"{subject}",
+                flush=True,
+            )
+
+            return "quarantined"
+
+        text = (
+            "🔐 **SMARTBIZ FIRE SECURITY ALERT**\n\n"
+            f"**From:** {sender}\n"
+            f"**Subject:** {subject}\n"
+            f"**Message ID:** {message_id}\n\n"
+            "Security-related email detected. "
+            "Sensitive message content has been withheld."
+        )
+
+    else:
+        # If a specialized channel isn't configured yet,
+        # temporarily route to fire-control.
+        if not channel:
+            channel = CHANNELS["control"]
+            route_label = (
+                f"{route} → control (fallback)"
+            )
+        else:
+            route_label = route
+
+        text = (
+            "📧 **SMARTBIZ FIRE EMAIL**\n\n"
+            f"**Route:** `{route_label}`\n"
+            f"**From:** {sender}\n"
+            f"**Subject:** {subject}\n"
+            f"**Message ID:** {message_id}\n\n"
+            f"{preview}"
+        )
+
+    subprocess.run(
+        [
+            OPENCLAW_BIN,
+            "message",
+            "send",
+            "--channel",
+            "discord",
+            "--target",
+            channel,
+            "--message",
+            text,
+        ],
+        check=True,
+    )
+
+    return channel
+
+
+# ============================================================
+# STARTUP
+# ============================================================
+
+state = load_state()
+
+messages = get_messages()
+
+
+# First run:
+# preserve existing behavior and do not dump historical email.
+if not state["initialized"]:
+
+    state["seen"] = [
+        m.get("message_id")
+        for m in messages
+        if m.get("message_id")
+    ]
+
+    state["initialized"] = True
+
+    save_state(state)
+
+    print(
+        "Bridge initialized. "
+        f"Existing messages marked as seen: "
+        f"{len(state['seen'])}",
+        flush=True,
+    )
+
+    print(
+        "Waiting for NEW email...",
+        flush=True,
+    )
+
+else:
+
+    print(
+        "AgentMail bridge started.",
+        flush=True,
+    )
+
+    print(
+        f"Inbox: {INBOX}",
+        flush=True,
+    )
+
+    print(
+        f"Default Discord: {DEFAULT_CHANNEL}",
+        flush=True,
+    )
+
+
+# ============================================================
+# MAIN LOOP
+# ============================================================
+
+while True:
+
+    try:
+
+        messages = get_messages()
+
+        for message in reversed(messages):
+
+            message_id = message.get(
+                "message_id"
+            )
+
+            if (
+                not message_id
+                or message_id in state["seen"]
+            ):
+                continue
+
+            route = classify_message(
+                message
+            )
+
+            print(
+                f"Classified: "
+                f"{message.get('subject', '(no subject)')} "
+                f"→ {route}",
+                flush=True,
+            )
+
+            destination = send_to_discord(
+                message,
+                route,
+            )
+
+            state["routes"][message_id] = {
+                "route": route,
+                "destination": destination,
+            }
+
+            state["seen"].append(
+                message_id
+            )
+
+            # Keep state bounded.
+            state["seen"] = state["seen"][-1000:]
+
+            if len(state["routes"]) > 1000:
+                state["routes"] = dict(
+                    list(
+                        state["routes"].items()
+                    )[-1000:]
+                )
+
+            save_state(state)
+
+            print(
+                f"Forwarded: "
+                f"{message.get('subject', '(no subject)')} "
+                f"→ {route}",
+                flush=True,
+            )
+
+        time.sleep(30)
+
+    except Exception as e:
+
+        print(
+            f"Bridge error: {e}",
+            flush=True,
+        )
+
+        time.sleep(30)

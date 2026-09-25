@@ -9,7 +9,7 @@
 
 ## 1. Executive Audit Summary
 
-The current codebase is a monolithic Python/Starlette application backed by SQLite (`smartbiz.sqlite`) with static HTML/JS frontend pages (`website/index.html`, `website/admin.html`, `website/technician.html`). It has 46 passing automated tests (`tests/test_main.py`), PayFast checkout/IPN stubs, ReportLab PDF generation (Inspection and Certificate of Compliance COC), Xero integration stubs, AgentMail/SMTP email dispatch, QR code generation, technician PIN verification, and lead import/outreach automation.
+The current codebase is a monolithic Python/Starlette application backed by SQLite (`smartbiz.sqlite`) with static HTML/JS frontend pages (`website/index.html`, `website/admin.html`, `website/technician.html`). It has 46 passing automated tests (`tests/test_main.py`), PayFast checkout/IPN stubs, ReportLab PDF generation (Inspection and Certificate of Compliance COC), Zoho Books accounting integration, AgentMail/SMTP email dispatch, QR code generation, technician PIN verification, and lead import/outreach automation.
 
 While the existing MVP provides basic booking, inspection completion, and PDF generation, it does not yet have a multi-site CRM, full equipment register (QR-tagged asset tracking), multi-page customer/public site, comprehensive inspection checklist engine, or full customer portal.
 
@@ -32,7 +32,7 @@ While the existing MVP provides basic booking, inspection completion, and PDF ge
 - **PDF Engine:** ReportLab-based inspection report and Certificate of Compliance (COC) generation with authorized signatory block.
 - **Lead Pipeline:** Lead creation, scoring, JSON/CSV export, outreach templating (`cold_intro`, `follow_up_1`, `appointment_confirm`, `missed_booking`), and Google Sheets export endpoint.
 - **Booking & Service:** Booking creation, confirmation, technician assignment, technician mobile completion with evidence notes and photo URL, refund window enforcement, and PayFast status tracking.
-- **Accounting & Integrations:** Xero OAuth / contact sync / invoice generation / credit note stubs, AgentMail / SMTP email integration, WhatsApp notification dispatch hook (`WHATSAPP_NUMBER=0677684582`).
+- **Accounting & Integrations:** Zoho Books accounting integration for contacts, invoices, payments and credit notes, AgentMail / SMTP email integration, WhatsApp notification dispatch hook (`WHATSAPP_NUMBER=+27634965466`).
 
 ### Frontend Components (`website/`)
 - `index.html`: Responsive single-page marketing site with hero, CTA buttons, trust stats, module overview, value propositions, testimonials, pricing, 48hr case study, compliance quiz, lead booking form, and live API health pill.

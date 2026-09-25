@@ -30,7 +30,11 @@ from smartbiz.services.inspection_service import (
 from smartbiz.services.certificate_service import (
     issue_certificate, get_certificate, get_certificate_by_number, generate_certificate_pdf
 )
-from smartbiz.services.renewal_service import scan_and_generate_renewal_reminders
+from smartbiz.services.renewal_service import (
+    scan_and_generate_renewal_reminders,
+    get_certificate_renewal_status,
+    list_due_certificate_renewals,
+)
 from smartbiz.services.calendar_service import get_calendar_provider
 from smartbiz.services.whatsapp_service import (
     handle_incoming_message, send_whatsapp_message, verify_webhook_signature, WHATSAPP_VERIFY_TOKEN
@@ -433,6 +437,40 @@ async def renewal_scan_endpoint(request: Request) -> JSONResponse:
     res = scan_and_generate_renewal_reminders()
     return JSONResponse(res)
 
+
+# --- Certificate Renewal Intelligence ---
+
+async def certificate_renewal_status_endpoint(
+    request: Request
+) -> JSONResponse:
+    certificate_id = int(request.path_params["certificate_id"])
+
+    try:
+        result = get_certificate_renewal_status(certificate_id)
+    except ValueError as exc:
+        return _err(str(exc), 422)
+
+    if not result:
+        return _err("Certificate not found", 404)
+
+    return JSONResponse({
+        "ok": True,
+        "renewal": result,
+    })
+
+
+async def renewals_due_endpoint(
+    request: Request
+) -> JSONResponse:
+    results = list_due_certificate_renewals()
+
+    return JSONResponse({
+        "ok": True,
+        "count": len(results),
+        "renewals": results,
+    })
+
+
 # --- WhatsApp Webhooks ---
 async def whatsapp_webhook_endpoint(request: Request) -> Any:
     if request.method == "GET":
@@ -469,6 +507,49 @@ async def whatsapp_webhook_endpoint(request: Request) -> Any:
         return JSONResponse({"ok": True, "processed": len(messages), "responses": messages})
     return _err("Method not allowed", 405)
 
+
+# --- Pricing Endpoints ---
+
+async def pricing_endpoint(request: Request) -> JSONResponse:
+    """Return approved SmartBiz Fire pricing from pricing_config."""
+    with db_lock, get_connection() as con:
+        rows = con.execute("""
+            SELECT
+                id,
+                service_code,
+                service_name,
+                service_category,
+                unit,
+                base_cost_cents,
+                markup_pct,
+                selling_price_cents,
+                vat_applicable,
+                vat_rate_pct,
+                min_quantity,
+                max_quantity,
+                effective_from,
+                effective_to,
+                approval_status,
+                approved_by,
+                approved_at,
+                notes
+            FROM pricing_config
+            WHERE approval_status = 'APPROVED'
+              AND (effective_to IS NULL OR effective_to = '')
+            ORDER BY service_category, service_name
+        """).fetchall()
+
+        pricing = [dict(row) for row in rows]
+
+        return JSONResponse({
+            "ok": True,
+            "count": len(pricing),
+            "currency": "ZAR",
+            "vat_rate_pct": 15.0,
+            "pricing": pricing
+        })
+
+
 def get_v2_routes() -> list[Route]:
     """Returns all V2 routes to mount in the application."""
     return [
@@ -485,6 +566,7 @@ def get_v2_routes() -> list[Route]:
         Route("/api/v1/inspections/{inspection_id:int}", inspection_detail_endpoint, methods=["GET"]),
         Route("/api/v1/inspections/{inspection_id:int}/complete", inspection_complete_endpoint, methods=["POST"]),
         Route("/api/v1/inspections/{inspection_id:int}/pdf", inspection_pdf_endpoint, methods=["GET"]),
+        Route("/api/v1/pricing", pricing_endpoint, methods=["GET"]),
         Route("/api/v1/quotes", quotes_list_create_endpoint, methods=["GET", "POST"]),
         Route("/api/v1/quotes/{quote_id:int}", quote_detail_endpoint, methods=["GET"]),
         Route("/api/v1/quotes/{quote_id:int}/approve", quote_approve_endpoint, methods=["POST"]),
@@ -492,6 +574,16 @@ def get_v2_routes() -> list[Route]:
         Route("/api/v1/certificates", certificates_list_create_endpoint, methods=["GET", "POST"]),
         Route("/api/v1/certificates/{certificate_id:int}", certificate_detail_endpoint, methods=["GET"]),
         Route("/api/v1/certificates/{certificate_id:int}/pdf", certificate_pdf_endpoint, methods=["GET"]),
+        Route(
+            "/api/v1/certificates/{certificate_id:int}/renewal",
+            certificate_renewal_status_endpoint,
+            methods=["GET"],
+        ),
+        Route(
+            "/api/v1/renewals/due",
+            renewals_due_endpoint,
+            methods=["GET"],
+        ),
         Route("/api/v1/certificates/verify/{certificate_number}", certificate_verify_endpoint, methods=["GET"]),
         Route("/api/v1/calendar/events", calendar_events_endpoint, methods=["GET", "POST"]),
         Route("/api/v1/renewal/scan", renewal_scan_endpoint, methods=["POST"]),

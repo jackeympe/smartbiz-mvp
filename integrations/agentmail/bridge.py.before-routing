@@ -1,0 +1,119 @@
+import os
+import time
+import json
+import requests
+import subprocess
+from pathlib import Path
+import shutil
+
+OPENCLAW_BIN = os.getenv("OPENCLAW_BIN", "openclaw")
+
+if not os.path.isfile(OPENCLAW_BIN):
+    resolved = shutil.which(OPENCLAW_BIN)
+    if resolved:
+        OPENCLAW_BIN = resolved
+    else:
+        raise RuntimeError(f"OpenClaw binary not found: {OPENCLAW_BIN}")
+API = "https://api.agentmail.to/v0"
+INBOX = os.environ["AGENTMAIL_INBOX"]
+CHANNEL = os.environ["OPENCLAW_DISCORD_CHANNEL"]
+KEY = os.environ["AGENTMAIL_API_KEY"]
+
+STATE_FILE = Path("integrations/agentmail/.state.json")
+headers = {"Authorization": f"Bearer {KEY}"}
+
+
+def load_state():
+    if STATE_FILE.exists():
+        return json.loads(STATE_FILE.read_text())
+    return {"initialized": False, "seen": []}
+
+
+def save_state(state):
+    STATE_FILE.write_text(json.dumps(state))
+
+
+def get_messages():
+    r = requests.get(
+        f"{API}/inboxes/{INBOX}/messages",
+        headers=headers,
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json().get("messages", [])
+
+
+def send_to_discord(message):
+    sender = message.get("from", "Unknown")
+    subject = message.get("subject", "(no subject)")
+    preview = message.get("preview", "")
+
+    text = (
+        "📧 **SMARTBIZ FIRE EMAIL**\n\n"
+        f"**From:** {sender}\n"
+        f"**Subject:** {subject}\n\n"
+        f"{preview}"
+    )
+
+    subprocess.run(
+        [
+            OPENCLAW_BIN,
+            "message",
+            "send",
+            "--channel",
+            "discord",
+            "--target",
+            CHANNEL,
+            "--message",
+            text,
+        ],
+        check=True,
+    )
+
+
+state = load_state()
+messages = get_messages()
+
+# First run: mark existing mail as seen.
+if not state["initialized"]:
+    state["seen"] = [
+        m.get("message_id")
+        for m in messages
+        if m.get("message_id")
+    ]
+    state["initialized"] = True
+    save_state(state)
+
+    print(f"Bridge initialized. Existing messages marked as seen: {len(state['seen'])}")
+    print("Waiting for NEW email...")
+else:
+    print("AgentMail bridge started.")
+    print(f"Inbox: {INBOX}")
+    print(f"Discord: {CHANNEL}")
+
+while True:
+    try:
+        messages = get_messages()
+
+        for message in reversed(messages):
+            message_id = message.get("message_id")
+
+            if not message_id or message_id in state["seen"]:
+                continue
+
+            send_to_discord(message)
+
+            state["seen"].append(message_id)
+            state["seen"] = state["seen"][-1000:]
+            save_state(state)
+
+            print(
+                f"Forwarded: {message.get('subject', '(no subject)')}",
+                flush=True,
+            )
+
+        time.sleep(30)
+
+    except Exception as e:
+        print(f"Bridge error: {e}", flush=True)
+        time.sleep(30)

@@ -33,7 +33,7 @@ DOCUMENT GENERATION (Inspection Report, Service Summary)
   ↓
 CERTIFICATE ISSUANCE (COC with unique ID & verification link)
   ↓
-INVOICING & PAYMENT (Xero / PayFast)
+INVOICING & PAYMENT (Zoho Books / PayFast)
   ↓
 JOB COMPLETION & AUDIT EVENT LOGGING
   ↓
@@ -66,7 +66,7 @@ NEXT SERVICE SCHEDULING
 ### Integrations & Adapters
 - **WhatsApp Provider:** Pluggable `WhatsAppProvider` supporting Meta Cloud API / WhatsApp Business Platform, webhook verification, interactive message flows, and fallback notification dispatch.
 - **Calendar Provider:** Pluggable `CalendarProvider` supporting Internal Calendar, Google Calendar API (OAuth2 / Service Account), and Microsoft Graph Outlook Calendar API with `Africa/Johannesburg` timezone synchronization.
-- **Accounting & Payments:** Xero REST API v2 (Contacts, Invoices, Credit Notes) and PayFast sandbox / production payment gateway with IPN signature verification.
+- **Accounting & Payments:** Zoho Books API v3 (Contacts, Invoices, Customer Payments, Credit Notes) and PayFast sandbox / production payment gateway with IPN signature verification.
 - **Email & Communications:** Multi-tier email provider with SMTP primary and AgentMail transactional fallback.
 
 ---
@@ -143,7 +143,7 @@ All business APIs reside under `/api/v1/*`. Legacy endpoints remain mapped for b
 ### Integrations & Webhooks
 - `POST /api/v1/webhooks/whatsapp` — Meta Cloud API webhook receiver.
 - `POST /api/v1/webhooks/payfast` — PayFast Instant Payment Notification (IPN) receiver.
-- `POST /api/v1/webhooks/xero` — Xero event receiver.
+- Accounting webhooks are provider-specific and are exposed only through the provider-neutral accounting integration boundary.
 - `GET /api/v1/calendar/events` [GET, POST] — Calendar sync provider endpoint.
 
 ---
@@ -169,7 +169,7 @@ All business APIs reside under `/api/v1/*`. Legacy endpoints remain mapped for b
    - Currency: **South African Rand (ZAR)**, stored as integer cents to prevent floating point errors.
    - Timezone: `Africa/Johannesburg` (SAST, UTC+02:00) strictly enforced across all timestamps and calendar events.
    - VAT: 15% configurable standard rate.
-   - Phone Numbers: Normalized to `+27` international format (e.g. `0677684582` -> `+27677684582`).
+   - Phone Numbers: Normalized to `+27` international format (e.g. `+27634965466` -> `+27677684582`).
 2. **Data Protection & Privacy:**
    - Public QR equipment verification shows equipment status and validity without leaking customer names, financials, or internal technician notes.
    - Secrets are managed exclusively via environment variables; never committed to version control.

@@ -1,3 +1,4 @@
+import os
 """Comprehensive End-to-End Acceptance Test validating the entire 25-step SmartBiz Fire business lifecycle:
 Lead -> Customer -> Inspection -> Calendar -> Technician Dispatch -> Equipment QR Scan -> Checklist ->
 Signature -> Report -> Certificate of Compliance -> Portal -> Renewal Engine.
@@ -17,6 +18,7 @@ def setup_db():
 
 def test_full_acceptance_journey_steps_1_to_25():
     client = TestClient(app)
+    admin_headers = {"x-smartbiz-token": os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")}
 
     # 1. Visitor opens homepage and verifies public status
     health_res = client.get("/health")
@@ -75,7 +77,7 @@ def test_full_acceptance_journey_steps_1_to_25():
         "site_id": site_id,
         "technician_id": 1,
         "scheduled_date": "2026-09-18"
-    })
+    }, headers=admin_headers)
     assert insp_res.status_code == 200
     insp_id = insp_res.json()["inspection"]["id"]
 
