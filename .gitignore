@@ -15,3 +15,7 @@ Thumbs.db
 Dockerfile
 docker-compose.yml
 .env
+
+# SQLite runtime files
+smartbiz.sqlite-wal
+smartbiz.sqlite-shm
