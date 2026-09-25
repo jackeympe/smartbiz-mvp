@@ -1,3 +1,4 @@
+import os
 """Comprehensive test suite for SmartBiz Fire V2 Platform features:
 Auth, Customers, Sites, Equipment Register, QR verification, Inspections, Quotes (15% VAT), Certificates, Calendar, WhatsApp, and Renewal Reminders.
 """
@@ -17,6 +18,7 @@ def setup_db():
 
 def test_v2_auth_login_and_me():
     client = TestClient(app)
+    admin_headers = {"x-smartbiz-token": os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")}
     # 1. Login with default seeded admin
     resp = client.post("/api/v1/auth/login", json={
         "email": "admin@smartbizfire.co.za",
@@ -153,7 +155,7 @@ def test_v2_inspection_and_certificate_of_compliance():
         "site_id": 1,
         "technician_id": 1,
         "scheduled_date": "2026-09-12"
-    })
+    }, headers=admin_headers)
     assert insp_resp.status_code == 200
     insp_id = insp_resp.json()["inspection"]["id"]
 

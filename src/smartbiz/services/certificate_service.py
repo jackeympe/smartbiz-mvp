@@ -31,6 +31,26 @@ def issue_certificate(
     now = datetime.now(timezone.utc)
     issue_date = now.strftime("%Y-%m-%d")
     expiry_date = (now + timedelta(days=validity_days)).strftime("%Y-%m-%d")
+
+    # Idempotency: one active COC per inspection.
+    # Prevents duplicate certificates when completion is retried.
+    if inspection_id:
+        with db_lock, get_connection() as con:
+            existing = con.execute(
+                """
+                SELECT id
+                FROM certificates
+                WHERE inspection_id = ?
+                  AND status = 'ISSUED'
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (inspection_id,),
+            ).fetchone()
+
+            if existing:
+                return get_certificate(existing[0])
+
     cert_num = generate_certificate_number()
 
     with db_lock, get_connection() as con:

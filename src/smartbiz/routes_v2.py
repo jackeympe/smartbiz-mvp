@@ -30,7 +30,11 @@ from smartbiz.services.inspection_service import (
 from smartbiz.services.certificate_service import (
     issue_certificate, get_certificate, get_certificate_by_number, generate_certificate_pdf
 )
-from smartbiz.services.renewal_service import scan_and_generate_renewal_reminders
+from smartbiz.services.renewal_service import (
+    scan_and_generate_renewal_reminders,
+    get_certificate_renewal_status,
+    list_due_certificate_renewals,
+)
 from smartbiz.services.calendar_service import get_calendar_provider
 from smartbiz.services.whatsapp_service import (
     handle_incoming_message, send_whatsapp_message, verify_webhook_signature, WHATSAPP_VERIFY_TOKEN
@@ -433,6 +437,40 @@ async def renewal_scan_endpoint(request: Request) -> JSONResponse:
     res = scan_and_generate_renewal_reminders()
     return JSONResponse(res)
 
+
+# --- Certificate Renewal Intelligence ---
+
+async def certificate_renewal_status_endpoint(
+    request: Request
+) -> JSONResponse:
+    certificate_id = int(request.path_params["certificate_id"])
+
+    try:
+        result = get_certificate_renewal_status(certificate_id)
+    except ValueError as exc:
+        return _err(str(exc), 422)
+
+    if not result:
+        return _err("Certificate not found", 404)
+
+    return JSONResponse({
+        "ok": True,
+        "renewal": result,
+    })
+
+
+async def renewals_due_endpoint(
+    request: Request
+) -> JSONResponse:
+    results = list_due_certificate_renewals()
+
+    return JSONResponse({
+        "ok": True,
+        "count": len(results),
+        "renewals": results,
+    })
+
+
 # --- WhatsApp Webhooks ---
 async def whatsapp_webhook_endpoint(request: Request) -> Any:
     if request.method == "GET":
@@ -536,6 +574,16 @@ def get_v2_routes() -> list[Route]:
         Route("/api/v1/certificates", certificates_list_create_endpoint, methods=["GET", "POST"]),
         Route("/api/v1/certificates/{certificate_id:int}", certificate_detail_endpoint, methods=["GET"]),
         Route("/api/v1/certificates/{certificate_id:int}/pdf", certificate_pdf_endpoint, methods=["GET"]),
+        Route(
+            "/api/v1/certificates/{certificate_id:int}/renewal",
+            certificate_renewal_status_endpoint,
+            methods=["GET"],
+        ),
+        Route(
+            "/api/v1/renewals/due",
+            renewals_due_endpoint,
+            methods=["GET"],
+        ),
         Route("/api/v1/certificates/verify/{certificate_number}", certificate_verify_endpoint, methods=["GET"]),
         Route("/api/v1/calendar/events", calendar_events_endpoint, methods=["GET", "POST"]),
         Route("/api/v1/renewal/scan", renewal_scan_endpoint, methods=["POST"]),
