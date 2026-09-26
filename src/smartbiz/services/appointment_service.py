@@ -13,6 +13,7 @@ from typing import Any, Dict
 
 from smartbiz.db import db_lock, get_connection
 from smartbiz.services.whatsapp_service import send_whatsapp_message
+from smartbiz.services.calendar_service import sync_internal_event_to_google
 
 TIMEZONE_SA = "Africa/Johannesburg"
 
@@ -220,6 +221,26 @@ def create_confirmed_appointment(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
         con.commit()
 
+    calendar_sync = sync_internal_event_to_google(
+        calendar_event_id,
+        location=location,
+        attendee_email=email,
+    )
+    with db_lock, get_connection() as con:
+        con.execute(
+            """
+            INSERT INTO job_events (job_id, event_type, detail, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                booking_id,
+                "google_calendar_synced" if calendar_sync.get("ok") else "google_calendar_pending",
+                json.dumps(calendar_sync, default=str),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        con.commit()
+
     message = (
         f"SmartBiz Fire appointment {booking_reference}\n"
         f"Status: Calendar reserved\n"
@@ -261,6 +282,9 @@ def create_confirmed_appointment(payload: Dict[str, Any]) -> Dict[str, Any]:
         "status": final_status.upper(),
         "calendar_reserved": True,
         "calendar_event_id": calendar_event_id,
+        "google_calendar_synced": bool(calendar_sync.get("ok")),
+        "google_calendar_event_id": calendar_sync.get("external_event_id", ""),
+        "google_calendar_url": calendar_sync.get("external_event_url", ""),
         "whatsapp_sent": live_sent,
         "whatsapp_status": wa_status,
         "start_time": start_iso,
