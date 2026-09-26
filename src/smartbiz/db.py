@@ -100,6 +100,28 @@ def init_all_tables() -> None:
             )
             """
         )
+        # Appointment booking lifecycle fields (idempotent migration).
+        for statement in (
+            "ALTER TABLE bookings ADD COLUMN scheduled_start TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE bookings ADD COLUMN scheduled_end TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE bookings ADD COLUMN booking_reference TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE bookings ADD COLUMN calendar_event_id INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE bookings ADD COLUMN whatsapp_status TEXT NOT NULL DEFAULT 'PENDING'",
+        ):
+            try:
+                con.execute(statement)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        con.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_bookings_reference "
+            "ON bookings(booking_reference) WHERE booking_reference != ''"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_calendar_events_window "
+            "ON calendar_events(start_time, end_time)"
+        )
+
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS technicians (
