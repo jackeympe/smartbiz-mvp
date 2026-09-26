@@ -118,11 +118,6 @@ def init_all_tables() -> None:
             "ON bookings(booking_reference) WHERE booking_reference != ''"
         )
         con.execute(
-            "CREATE INDEX IF NOT EXISTS idx_calendar_events_window "
-            "ON calendar_events(start_time, end_time)"
-        )
-
-        con.execute(
             """
             CREATE TABLE IF NOT EXISTS technicians (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
