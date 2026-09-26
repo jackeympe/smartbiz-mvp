@@ -1,3 +1,4 @@
+from smartbiz.services.revenue_service import get_revenue_dashboard
 """SmartBiz Fire V2 API Routes and Handlers for CRM, Operations, Equipment, Quotes, Certificates, Calendar, WhatsApp."""
 import base64
 import json
@@ -576,6 +577,32 @@ async def pricing_endpoint(request: Request) -> JSONResponse:
         })
 
 
+
+async def revenue_dashboard_endpoint(request: Request):
+    """Authenticated CEO revenue command-centre endpoint."""
+    auth_header = request.headers.get("Authorization") or ""
+    token = auth_header.replace("Bearer ", "").strip()
+    session = verify_session_token(token)
+
+    if not session:
+        return _err("Unauthorized session", 401)
+
+    if session.get("role") not in (
+        ROLE_SUPER_ADMIN,
+        ROLE_ADMIN,
+        ROLE_MANAGER,
+    ):
+        return _err("Forbidden", 403)
+
+    try:
+        return JSONResponse(get_revenue_dashboard())
+    except Exception as exc:
+        return JSONResponse(
+            {"error": "revenue_dashboard_failed", "detail": str(exc)},
+            status_code=500,
+        )
+
+
 def get_v2_routes() -> list[Route]:
     """Returns all V2 routes to mount in the application."""
     return [
@@ -611,6 +638,11 @@ def get_v2_routes() -> list[Route]:
             methods=["GET"],
         ),
         Route("/api/v1/certificates/verify/{certificate_number}", certificate_verify_endpoint, methods=["GET"]),
+        Route(
+            "/api/v1/admin/revenue-dashboard",
+            revenue_dashboard_endpoint,
+            methods=["GET"],
+        ),
         Route("/api/v1/appointments/availability", appointment_availability_endpoint, methods=["GET"]),
         Route("/api/v1/appointments", appointments_endpoint, methods=["POST"]),
         Route("/api/v1/calendar/events", calendar_events_endpoint, methods=["GET", "POST"]),

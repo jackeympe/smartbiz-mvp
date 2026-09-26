@@ -43,8 +43,73 @@
     .full { width: 100%; }
     @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
   </style>
+
+<style id="revenue-command-css">
+.revenue-command{margin:24px 0}
+.revenue-title{display:flex;justify-content:space-between;align-items:end;gap:16px;margin-bottom:16px}
+.revenue-title h2{margin:0}
+.revenue-title small{opacity:.7}
+.revenue-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
+.revenue-card{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:16px;background:rgba(255,255,255,.035)}
+.revenue-card .label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.68}
+.revenue-card .value{font-size:24px;font-weight:800;margin-top:7px}
+.revenue-panel{border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:16px;margin:16px 0;background:rgba(255,255,255,.025)}
+.revenue-panel h3{margin-top:0}
+.revenue-table{width:100%;border-collapse:collapse}
+.revenue-table th,.revenue-table td{text-align:left;padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.08);font-size:13px}
+.revenue-table th{font-size:11px;text-transform:uppercase;opacity:.65}
+.revenue-high{font-weight:700}
+.revenue-empty{opacity:.6;padding:14px 0}
+.revenue-status{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.15);font-size:11px}
+@media(max-width:700px){
+ .revenue-table{display:block;overflow-x:auto}
+}
+</style>
+
 </head>
 <body>
+
+<section id="revenue-command-centre" class="revenue-command" style="display:none">
+  <div class="revenue-title">
+    <div>
+      <h2>Revenue Command Centre</h2>
+      <small>SmartBiz Fire operating dashboard</small>
+    </div>
+    <button type="button" onclick="loadRevenueDashboard()">Refresh</button>
+  </div>
+
+  <div class="revenue-kpis">
+    <div class="revenue-card"><div class="label">Leads Today</div><div class="value" id="rv-leads">—</div></div>
+    <div class="revenue-card"><div class="label">Opportunity</div><div class="value" id="rv-opportunity">—</div></div>
+    <div class="revenue-card"><div class="label">Open Quotes</div><div class="value" id="rv-open-quotes">—</div></div>
+    <div class="revenue-card"><div class="label">Quote Pipeline</div><div class="value" id="rv-pipeline">—</div></div>
+    <div class="revenue-card"><div class="label">Booked Revenue</div><div class="value" id="rv-booked">—</div></div>
+    <div class="revenue-card"><div class="label">Invoiced</div><div class="value" id="rv-invoiced">—</div></div>
+    <div class="revenue-card"><div class="label">Cash Collected</div><div class="value" id="rv-cash">—</div></div>
+    <div class="revenue-card"><div class="label">Delivered Value</div><div class="value" id="rv-delivered">—</div></div>
+  </div>
+
+  <div class="revenue-panel">
+    <h3>Needs Action Today</h3>
+    <div id="rv-actions"></div>
+  </div>
+
+  <div class="revenue-panel">
+    <h3>Open Quotes</h3>
+    <div id="rv-quotes"></div>
+  </div>
+
+  <div class="revenue-panel">
+    <h3>Upcoming Inspections</h3>
+    <div id="rv-appointments"></div>
+  </div>
+
+  <div class="revenue-panel">
+    <h3>Renewals — Next 90 Days</h3>
+    <div id="rv-renewals"></div>
+  </div>
+</section>
+
   <div class="wrap">
     <section id="admin-login" class="lead">
       <h2>Admin Login</h2>
@@ -536,5 +601,187 @@
       URL.revokeObjectURL(url);
     }
   </script>
+
+<script id="revenue-command-js">
+function revenueMoney(cents) {
+  return new Intl.NumberFormat('en-ZA', {
+    style: 'currency',
+    currency: 'ZAR',
+    maximumFractionDigits: 2
+  }).format((Number(cents) || 0) / 100);
+}
+
+function revenueEsc(v) {
+  return String(v == null ? '' : v)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'",'&#039;');
+}
+
+function revenueToken() {
+  if (typeof ADMIN_TOKEN !== 'undefined' && ADMIN_TOKEN) return ADMIN_TOKEN;
+  return sessionStorage.getItem('smartbiz_admin_token') || '';
+}
+
+async function loadRevenueDashboard() {
+  const token = revenueToken();
+  if (!token) return;
+
+  const response = await fetch('/api/v1/admin/revenue-dashboard', {
+    headers: {
+      'Authorization': 'Bearer ' + token
+    }
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    console.warn('Revenue dashboard authorization rejected');
+    return;
+  }
+
+  if (!response.ok) {
+    console.error('Revenue dashboard failed:', response.status);
+    return;
+  }
+
+  const data = await response.json();
+  const k = data.kpis || {};
+
+  document.getElementById('revenue-command-centre').style.display = 'block';
+
+  document.getElementById('rv-leads').textContent = k.leads_today || 0;
+  document.getElementById('rv-opportunity').textContent = revenueMoney(k.opportunity_value_cents);
+  document.getElementById('rv-open-quotes').textContent = k.open_quotes || 0;
+  document.getElementById('rv-pipeline').textContent = revenueMoney(k.open_quote_value_cents);
+  document.getElementById('rv-booked').textContent = revenueMoney(k.booked_revenue_cents);
+  document.getElementById('rv-invoiced').textContent = revenueMoney(k.invoiced_revenue_cents);
+  document.getElementById('rv-cash').textContent = revenueMoney(k.cash_collected_cents);
+  document.getElementById('rv-delivered').textContent = revenueMoney(k.delivered_job_value_cents);
+
+  renderRevenueActions(data.actions || []);
+  renderRevenueQuotes(data.quotes || []);
+  renderRevenueAppointments(data.appointments || []);
+  renderRevenueRenewals(data.renewals || []);
+}
+
+function renderRevenueActions(rows) {
+  const el = document.getElementById('rv-actions');
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="revenue-empty">No revenue actions currently due.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="revenue-table">
+      <thead><tr>
+        <th>Priority</th><th>Action</th><th>Customer</th>
+        <th>Status</th><th>Value</th><th>Contact</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(x => `
+          <tr>
+            <td class="${x.priority === 'HIGH' ? 'revenue-high' : ''}">${revenueEsc(x.priority)}</td>
+            <td>${revenueEsc(x.title)}</td>
+            <td>${revenueEsc(x.company || x.customer)}</td>
+            <td><span class="revenue-status">${revenueEsc(x.status)}</span></td>
+            <td>${revenueMoney(x.value_cents)}</td>
+            <td>${x.phone ? `<a href="tel:${revenueEsc(x.phone)}">CALL</a>` : '—'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderRevenueQuotes(rows) {
+  const el = document.getElementById('rv-quotes');
+
+  const open = rows.filter(x =>
+    !['WON','APPROVED','ACCEPTED','LOST','DECLINED'].includes(String(x.stage).toUpperCase())
+  );
+
+  if (!open.length) {
+    el.innerHTML = '<div class="revenue-empty">No open quotations.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="revenue-table">
+      <thead><tr>
+        <th>Quote</th><th>Customer</th><th>Value</th>
+        <th>Stage</th><th>Follow-up</th>
+      </tr></thead>
+      <tbody>
+        ${open.map(x => `
+          <tr>
+            <td>${revenueEsc(x.quote_number)}</td>
+            <td>${revenueEsc(x.company)}</td>
+            <td>${revenueMoney(x.total_cents)}</td>
+            <td><span class="revenue-status">${revenueEsc(x.stage)}</span></td>
+            <td>${revenueEsc(x.follow_up_date || 'Not set')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderRevenueAppointments(rows) {
+  const el = document.getElementById('rv-appointments');
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="revenue-empty">No upcoming inspections booked.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="revenue-table">
+      <thead><tr>
+        <th>Booking</th><th>Customer</th><th>Service</th>
+        <th>Date</th><th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(x => `
+          <tr>
+            <td>${revenueEsc(x.booking_reference)}</td>
+            <td>${revenueEsc(x.company || x.customer)}</td>
+            <td>${revenueEsc(x.service)}</td>
+            <td>${revenueEsc(x.scheduled_start)}</td>
+            <td><span class="revenue-status">${revenueEsc(x.status)}</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderRevenueRenewals(rows) {
+  const el = document.getElementById('rv-renewals');
+
+  if (!rows.length) {
+    el.innerHTML = '<div class="revenue-empty">No certificates expiring within 90 days.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <table class="revenue-table">
+      <thead><tr>
+        <th>Certificate</th><th>Customer</th><th>Site</th>
+        <th>Expiry</th><th>Days</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(x => `
+          <tr>
+            <td>${revenueEsc(x.certificate_number)}</td>
+            <td>${revenueEsc(x.company)}</td>
+            <td>${revenueEsc(x.site)}</td>
+            <td>${revenueEsc(x.expiry_date)}</td>
+            <td>${revenueEsc(x.days_remaining)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+</script>
+
 </body>
 </html>
