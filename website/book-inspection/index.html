@@ -13,7 +13,7 @@
 <section class="page-hero">
   <p class="eyebrow">Get Started</p>
   <h1>Book a Fire Safety<br><span class="red">Inspection</span></h1>
-  <p>Submit your details below and our team will contact you promptly to confirm your inspection appointment.</p>
+  <p>Choose your preferred inspection date and time. We will check availability, reserve the appointment on our calendar and send confirmation to your WhatsApp.</p>
 </section>
 
 <section class="form-section">
@@ -49,6 +49,17 @@
           <option>1–5</option><option>6–20</option><option>21–50</option><option>50+</option><option>Unknown</option>
         </select></label>
       </div>
+      <div class="two">
+        <label>Preferred Date *<input name="preferred_date" id="preferredDate" type="date" required /></label>
+        <label>Preferred Time *<select name="preferred_time" required>
+          <option value="">Select time</option>
+          <option value="08:00">08:00</option><option value="09:00">09:00</option>
+          <option value="10:00">10:00</option><option value="11:00">11:00</option>
+          <option value="13:00">13:00</option><option value="14:00">14:00</option>
+          <option value="15:00">15:00</option>
+        </select></label>
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin-top:-8px">Appointment times use South Africa time (Africa/Johannesburg). We reserve 90 minutes for a standard inspection.</p>
       <label>Urgency<select name="urgency" id="urgencySelect">
         <option value="1">Routine — within 60 days</option>
         <option value="4">Soon — within 30 days</option>
@@ -60,7 +71,7 @@
         <input type="checkbox" name="consent" required />
         I consent to SmartBiz Fire contacting me regarding fire safety services. I understand my details will be handled in accordance with the SmartBiz Fire <a href="/privacy" style="color:var(--red)">Privacy Policy</a>.
       </label>
-      <button class="btn red" type="submit" id="formBtn" style="width:fit-content">Submit Inspection Request →</button>
+      <button class="btn red" type="submit" id="formBtn" style="width:fit-content">Check & Book Inspection →</button>
       <div class="result" id="formResult" style="display:none"></div>
     </form>
   </div>
@@ -78,36 +89,89 @@
 <a class="wa-float" href="https://wa.me/27634965466?text=Hello%20SmartBiz%20Fire.%20I%20would%20like%20to%20book%20a%20fire%20safety%20inspection." target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
 
 <script>
-const urgencyMsg = { '1':'within 60 days', '4':'within 30 days', '7':'within 7 days', '10':'within 48 hours (emergency)' };
+const dateInput = document.getElementById('preferredDate');
+const today = new Date();
+const localTomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+dateInput.min = [
+  localTomorrow.getFullYear(),
+  String(localTomorrow.getMonth()+1).padStart(2,'0'),
+  String(localTomorrow.getDate()).padStart(2,'0')
+].join('-');
+
 document.getElementById('inspectionForm').addEventListener('submit', async function(e) {
   e.preventDefault();
   const fd = new FormData(this);
   const d = Object.fromEntries(fd);
   const res = document.getElementById('formResult');
   const btn = document.getElementById('formBtn');
-  if (!d.consent) { show('error','Please accept the consent checkbox.'); return; }
+
+  if (!d.consent) return show('error','Please accept the consent checkbox.');
+  if (!d.preferred_date || !d.preferred_time) return show('error','Select a preferred appointment date and time.');
+
   const [fn,...ln] = (d.contact||'').trim().split(' ');
-  const score = parseInt(d.urgency)||1;
-  const ref = 'SB-' + Date.now().toString().slice(-7);
-  btn.disabled=true; btn.textContent='Submitting…';
+  const startTime = d.preferred_date + 'T' + d.preferred_time + ':00';
+
+  btn.disabled = true;
+  btn.textContent = 'Checking calendar…';
+
   try {
-    const r = await fetch('/api/v1/leads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
-      first_name:fn||'Valued', last_name:ln.join(' ')||'Customer',
-      email:d.email, phone:d.phone, company:d.company,
-      interest:d.interest, source:'web-inspection-form',
-      industry:d.industry, location:d.location, score
-    })});
-    const j = await r.json();
-    if(r.ok) {
-      const leadRef = 'SB-' + String(j.lead_id||ref).padStart(6,'0');
-      show('success',`✓ Inspection request received (${leadRef}). We will contact you ${urgencyMsg[d.urgency]||'shortly'}.`);
-      this.reset();
-    } else {
-      show('error', j.detail||'Submission failed. Please WhatsApp us directly.');
+    const availability = await fetch('/api/v1/appointments/availability?start_time=' + encodeURIComponent(startTime) + '&duration_minutes=90');
+    const available = await availability.json();
+    if (!availability.ok) throw new Error(available.detail || 'Could not check calendar availability.');
+    if (!available.available) {
+      show('error','That time is already booked. Please choose another date or time.');
+      return;
     }
-  } catch(err) { show('error','Could not reach our server. Please WhatsApp us directly on +27 63 496 5466.'); }
-  btn.disabled=false; btn.textContent='Submit Inspection Request →';
-  function show(t,m){ res.style.display='block'; res.className='result '+t; res.textContent=m; res.scrollIntoView({behavior:'smooth',block:'nearest'}); }
+
+    btn.textContent = 'Reserving appointment…';
+    const response = await fetch('/api/v1/appointments', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        first_name:fn||'Valued',
+        last_name:ln.join(' ')||'Customer',
+        email:d.email,
+        phone:d.phone,
+        whatsapp_number:d.phone,
+        company:d.company,
+        service:d.interest,
+        industry:d.industry,
+        location:d.location,
+        notes:d.notes||'',
+        start_time:startTime,
+        duration_minutes:90
+      })
+    });
+    const j = await response.json();
+
+    if (response.status === 409) {
+      show('error','That appointment was just taken. Please select another time.');
+    } else if (!response.ok) {
+      show('error',j.detail||'Booking failed. Please WhatsApp us directly.');
+    } else if (j.status === 'CONFIRMED' && j.calendar_reserved && j.whatsapp_sent) {
+      show('success',`✓ Appointment confirmed — ${j.booking_reference}. Calendar reserved for ${formatDate(j.start_time)} and WhatsApp confirmation sent.`);
+      this.reset();
+      dateInput.min = localTomorrow.toISOString().slice(0,10);
+    } else {
+      show('success',`Calendar reserved — ${j.booking_reference}. WhatsApp confirmation is pending. Our team will confirm the appointment before dispatch.`);
+      this.reset();
+    }
+  } catch(err) {
+    show('error', err.message || 'Could not reach our booking system. Please WhatsApp us on +27 63 496 5466.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Check & Book Inspection →';
+  }
+
+  function formatDate(value) {
+    return value.replace('T',' ').slice(0,16) + ' SAST';
+  }
+  function show(type,msg) {
+    res.style.display='block';
+    res.className='result '+type;
+    res.textContent=msg;
+    res.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
 });
 </script>
 </body>
