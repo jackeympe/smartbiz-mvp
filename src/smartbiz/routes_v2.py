@@ -36,6 +36,7 @@ from smartbiz.services.renewal_service import (
     list_due_certificate_renewals,
 )
 from smartbiz.services.calendar_service import get_calendar_provider
+from smartbiz.services.appointment_service import check_availability, create_confirmed_appointment
 from smartbiz.services.whatsapp_service import (
     handle_incoming_message, send_whatsapp_message, verify_webhook_signature, WHATSAPP_VERIFY_TOKEN
 )
@@ -432,6 +433,31 @@ async def calendar_events_endpoint(request: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "event": event})
     return _err("Method not allowed", 405)
 
+# --- Public Appointment Booking Endpoints ---
+async def appointment_availability_endpoint(request: Request) -> JSONResponse:
+    start_time = (request.query_params.get("start_time") or "").strip()
+    try:
+        duration = int(request.query_params.get("duration_minutes") or 90)
+        result = check_availability(start_time, duration)
+    except (TypeError, ValueError) as exc:
+        return _err(str(exc), 422)
+    return JSONResponse({"ok": True, **result})
+
+
+async def appointments_endpoint(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        return _err("Invalid JSON body")
+    try:
+        result = create_confirmed_appointment(body)
+    except (TypeError, ValueError) as exc:
+        return _err(str(exc), 422)
+    if result.get("status") == "UNAVAILABLE":
+        return JSONResponse(result, status_code=409)
+    return JSONResponse(result, status_code=201)
+
+
 # --- Renewal & Reminders Endpoints ---
 async def renewal_scan_endpoint(request: Request) -> JSONResponse:
     res = scan_and_generate_renewal_reminders()
@@ -585,6 +611,8 @@ def get_v2_routes() -> list[Route]:
             methods=["GET"],
         ),
         Route("/api/v1/certificates/verify/{certificate_number}", certificate_verify_endpoint, methods=["GET"]),
+        Route("/api/v1/appointments/availability", appointment_availability_endpoint, methods=["GET"]),
+        Route("/api/v1/appointments", appointments_endpoint, methods=["POST"]),
         Route("/api/v1/calendar/events", calendar_events_endpoint, methods=["GET", "POST"]),
         Route("/api/v1/renewal/scan", renewal_scan_endpoint, methods=["POST"]),
         Route("/api/v1/webhooks/whatsapp", whatsapp_webhook_endpoint, methods=["GET", "POST"]),
