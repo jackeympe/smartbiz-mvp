@@ -274,6 +274,16 @@ def test_public_appointment_booking_calendar_and_whatsapp_confirmation(monkeypat
             "message": message,
         },
     )
+    monkeypatch.setattr(
+        appointment_service,
+        "sync_internal_event_to_google",
+        lambda event_id, **kwargs: {
+            "ok": True,
+            "provider": "GOOGLE",
+            "external_event_id": "google-test-event",
+            "external_event_url": "https://calendar.google.com/calendar/event?eid=test",
+        },
+    )
 
     start_time = "2027-02-10T09:00:00"
     availability = client.get(
@@ -301,6 +311,8 @@ def test_public_appointment_booking_calendar_and_whatsapp_confirmation(monkeypat
     data = booked.json()
     assert data["status"] == "CONFIRMED"
     assert data["calendar_reserved"] is True
+    assert data["google_calendar_synced"] is True
+    assert data["google_calendar_event_id"] == "google-test-event"
     assert data["whatsapp_sent"] is True
     assert data["booking_reference"].startswith("SB-APT-")
 
