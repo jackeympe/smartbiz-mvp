@@ -258,3 +258,83 @@ def test_v2_whatsapp_webhook_and_menu_flow():
     assert res_data["ok"] is True
     assert len(res_data["responses"]) == 1
     assert "SmartBiz Fire Safety" in res_data["responses"][0]["message"]
+
+def test_public_appointment_booking_calendar_and_whatsapp_confirmation(monkeypatch):
+    from smartbiz.services import appointment_service
+    from smartbiz.db import get_connection
+
+    client = TestClient(app)
+    monkeypatch.setattr(
+        appointment_service,
+        "send_whatsapp_message",
+        lambda to_number, message: {
+            "ok": True,
+            "mode": "meta_cloud",
+            "recipient": to_number,
+            "message": message,
+        },
+    )
+
+    start_time = "2027-02-10T09:00:00"
+    availability = client.get(
+        "/api/v1/appointments/availability",
+        params={"start_time": start_time, "duration_minutes": 90},
+    )
+    assert availability.status_code == 200
+    assert availability.json()["available"] is True
+
+    booked = client.post("/api/v1/appointments", json={
+        "first_name": "Naledi",
+        "last_name": "Mokoena",
+        "email": "naledi.booking@example.co.za",
+        "phone": "+27600000001",
+        "whatsapp_number": "+27600000001",
+        "company": "Appointment Test Company",
+        "service": "Fire Safety Inspection",
+        "industry": "Office",
+        "location": "10 Booking Street, Johannesburg",
+        "start_time": start_time,
+        "duration_minutes": 90,
+        "notes": "Automated booking acceptance test",
+    })
+    assert booked.status_code == 201, booked.text
+    data = booked.json()
+    assert data["status"] == "CONFIRMED"
+    assert data["calendar_reserved"] is True
+    assert data["whatsapp_sent"] is True
+    assert data["booking_reference"].startswith("SB-APT-")
+
+    conflict = client.post("/api/v1/appointments", json={
+        "first_name": "Second",
+        "last_name": "Customer",
+        "email": "second.booking@example.co.za",
+        "phone": "+27600000002",
+        "whatsapp_number": "+27600000002",
+        "company": "Conflicting Appointment Company",
+        "service": "Fire Safety Inspection",
+        "location": "20 Booking Street, Johannesburg",
+        "start_time": "2027-02-10T09:30:00",
+        "duration_minutes": 90,
+    })
+    assert conflict.status_code == 409
+    assert conflict.json()["status"] == "UNAVAILABLE"
+
+    with get_connection() as con:
+        booking = con.execute(
+            "SELECT status, calendar_event_id, whatsapp_status FROM bookings WHERE id = ?",
+            (data["booking_id"],),
+        ).fetchone()
+        assert booking["status"] == "confirmed"
+        assert booking["calendar_event_id"] > 0
+        assert booking["whatsapp_status"] == "SENT"
+
+        reminders = con.execute(
+            "SELECT template_key, status FROM notifications WHERE payload LIKE ? ORDER BY id",
+            (f'%\"booking_id\": {data["booking_id"]}%',),
+        ).fetchall()
+        assert [row["template_key"] for row in reminders] == [
+            "APPOINTMENT_REMINDER_24H",
+            "APPOINTMENT_REMINDER_2H",
+        ]
+        assert all(row["status"] == "QUEUED" for row in reminders)
+
