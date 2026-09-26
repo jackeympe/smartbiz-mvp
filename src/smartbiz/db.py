@@ -305,17 +305,6 @@ def init_all_tables() -> None:
             )
             """
         )
-        # External calendar mirror fields.
-        for statement in (
-            "ALTER TABLE calendar_events ADD COLUMN external_event_id TEXT NOT NULL DEFAULT ''",
-            "ALTER TABLE calendar_events ADD COLUMN external_event_url TEXT NOT NULL DEFAULT ''",
-        ):
-            try:
-                con.execute(statement)
-            except sqlite3.OperationalError as exc:
-                if "duplicate column name" not in str(exc).lower():
-                    raise
-
         con.execute(
             """
             CREATE TABLE IF NOT EXISTS notifications (
@@ -349,4 +338,14 @@ def init_all_tables() -> None:
             )
             """
         )
+        # Existing databases need the Google Calendar URL column after the table exists.
+        for statement in (
+            "ALTER TABLE calendar_events ADD COLUMN external_event_id TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE calendar_events ADD COLUMN external_event_url TEXT NOT NULL DEFAULT ''",
+        ):
+            try:
+                con.execute(statement)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
         con.commit()
