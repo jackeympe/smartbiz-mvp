@@ -150,6 +150,7 @@ def test_v2_quote_lifecycle_vat_calculation_and_pdf():
 
 def test_v2_inspection_and_certificate_of_compliance():
     client = TestClient(app)
+    admin_headers = {"x-smartbiz-token": os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")}
     # 1. Create Inspection
     insp_resp = client.post("/api/v1/inspections", json={
         "site_id": 1,
@@ -169,14 +170,17 @@ def test_v2_inspection_and_certificate_of_compliance():
         "checklist_results": results,
         "findings_summary": "100% compliant during annual audit",
         "recommendations": "Keep exits clear at all times"
-    })
+    }, headers=admin_headers)
     assert comp_resp.status_code == 200
     completed_insp = comp_resp.json()["inspection"]
     assert completed_insp["status"] == "COMPLETED"
     assert completed_insp["overall_score"] == 100
 
     # 3. Generate Inspection Report PDF
-    insp_pdf_resp = client.get(f"/api/v1/inspections/{insp_id}/pdf")
+    insp_pdf_resp = client.get(
+        f"/api/v1/inspections/{insp_id}/pdf",
+        headers=admin_headers
+    )
     assert insp_pdf_resp.status_code == 200
 
     # 4. Issue Certificate of Compliance (COC)

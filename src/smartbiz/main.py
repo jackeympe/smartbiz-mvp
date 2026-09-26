@@ -28,7 +28,7 @@ from smartbiz.db import init_all_tables
 from smartbiz.auth import seed_default_admin
 from smartbiz.routes_v2 import get_v2_routes
 
-DB_PATH = "smartbiz.sqlite"
+DB_PATH = os.environ.get("DB_PATH", "smartbiz.sqlite")
 lock = threading.Lock()
 ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")
 AGENTMAIL_INBOX_ID = os.environ.get("AGENTMAIL_INBOX_ID", "compliance1660@agentmail.to")
