@@ -139,6 +139,21 @@ def create_confirmed_appointment(payload: Dict[str, Any]) -> Dict[str, Any]:
             )
             site_id = int(cur.lastrowid)
 
+        lead_cur = con.execute(
+            """
+            INSERT INTO leads (
+              first_name, last_name, email, phone, company, interest, status,
+              source, score, industry, location, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'appointment', 'web-booking', 7, ?, ?, ?, ?)
+            """,
+            (
+                first_name, last_name, email, phone, company, service,
+                (payload.get("industry") or "general").strip(),
+                location, now_iso, now_iso,
+            ),
+        )
+        lead_id = int(lead_cur.lastrowid)
+
         cur = con.execute(
             """
             INSERT INTO bookings (
@@ -241,6 +256,7 @@ def create_confirmed_appointment(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "ok": True,
         "booking_id": booking_id,
+        "lead_id": lead_id,
         "booking_reference": booking_reference,
         "status": final_status.upper(),
         "calendar_reserved": True,
