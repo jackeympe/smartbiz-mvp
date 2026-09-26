@@ -165,7 +165,7 @@
     const API_BASE = (typeof SMARTBIZ_API_URL !== 'undefined' && SMARTBIZ_API_URL) ? SMARTBIZ_API_URL.replace(/\/$/, '') : '';
     const IS_PROD = API_BASE !== '';
     const FALLBACK_LOCAL = 'http://localhost:8000';
-    const ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || '';
+    let ADMIN_TOKEN = (typeof SMARBIZ_ADMIN_TOKEN !== 'undefined' && SMARBIZ_ADMIN_TOKEN) || '';
     let USE_API = !!ADMIN_TOKEN;
 
     function request(path, options = {}) {
@@ -200,8 +200,9 @@
         msg.className = 'msg err';
         return;
       }
+      ADMIN_TOKEN = token;
       USE_API = true;
-      setMsg('login-msg', 'Logged in. Loading...', 'ok');
+      setMsg('login-msg', 'Authenticating...', 'ok');
       showAdmin(true);
       loadJobs();
       loadLeads();
