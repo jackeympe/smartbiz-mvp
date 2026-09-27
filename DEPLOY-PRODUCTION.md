@@ -1,51 +1,88 @@
-# SmartBiz Production Deploy Checklist
+# SmartBiz Fire MVP — Production Deployment
 
-## Environment variables
+## Architecture
+
+- Frontend: Cloudflare Pages, static content from `website/`
+- Backend: FastAPI container from `Dockerfile`
+- Runtime database: persistent SQLite volume for the MVP
+- Edge: Cloudflare DNS/HTTPS in front of the public site and API
+- Orchestration: OpenClaw
+- Engineering executor: Hermes
+- Operations office: Discord
+
+## Required production environment
+
+Set these only in the backend secret store:
+
+- `SMARTBIZ_ENV=production`
+- `AUTH_SECRET`
 - `SMARTBIZ_ADMIN_TOKEN`
-- `SMARBIZ_TECHNICIAN_TOKEN`
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMARTBIZ_EMAIL_TO`
-- `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE`, `PAYFAST_URL`
-- `SMARBIZ_API_URL`
-- `SMARBIZ_SITE_URL`
-- Zoho credentials: configure only in the deployment secret manager after the Zoho integration is implemented.
+- `SMARTBIZ_TECHNICIAN_TOKEN`
+- `DEFAULT_ADMIN_EMAIL`
+- `DEFAULT_ADMIN_PASSWORD`
+- `DEFAULT_ADMIN_PHONE`
+- `SMARTBIZ_ALLOWED_ORIGINS=https://smartbizfire.co.za,https://www.smartbizfire.co.za`
+- SMTP credentials
+- PayFast credentials
+- Google Calendar credentials where enabled
+- WhatsApp/Meta credentials only after verification
 
-## API host
-- Recommended: Render, Fly.io, Railway, Azure Container Apps
-- Expose port 8000
-- Set workers/instances to at least 1
+Never expose backend secrets to Cloudflare static frontend variables.
 
-## Database
-- SQLite file `smartbiz.sqlite` is created automatically on first run
-- For production, back up the SQLite file regularly
-- For scaling, plan migration to PostgreSQL/RDS
+## Backend
 
-## Security
-- Use strong admin and technician tokens
-- Enable HTTPS on the API host
-- Restrict Cloudflare Pages `SMARBIZ_API_URL` to HTTPS
-- Store all third-party credentials only in the deployment secret manager
+Build:
 
-## Cloudflare Pages
-- Project type: Static assets
-- Environment variables:
-  - `SMARBIZ_API_URL` = `https://your-api.example.com`
-  - `SMARTBIZ_ADMIN_TOKEN` = your chosen admin token
+```bash
+docker build -t smartbiz-mvp .
+```
 
-## PayFast
-- Set PayFast notify URL to `https://your-api.example.com/payfast/notify`
-- Enable IPN/notify in PayFast merchant settings
-- Verify merchant key and passphrase
+Run with Compose:
 
-## Zoho
-- Zoho provides the accounting and business-operations integration for SmartBiz Fire.
-- Implement Zoho through a dedicated integration module with credentials supplied through the deployment secret manager.
-- Do not store Zoho secrets in source control or `.env.example`.
+```bash
+docker compose up -d --build
+docker compose ps
+curl -fsS http://127.0.0.1:8000/health
+```
 
-## Verification
-- `/health` returns `{"status": "ok"}`
-- `/api/v1/status` returns counts
+The Compose configuration stores `/app/data/smartbiz.sqlite` in the named `smartbiz_data` volume.
 
-## Monitoring
-- Watch API logs for 4xx/5xx spikes
-- Monitor booking completion and refund events
-- Check PayFast IPN success/failure
+Back up that volume before upgrades or migrations.
+
+## Frontend
+
+Deploy only `website/` to Cloudflare Pages.
+
+The browser must never receive:
+
+- admin tokens
+- authentication secrets
+- OAuth refresh tokens
+- SMTP passwords
+- payment secrets
+
+Configure the public API origin/route through Cloudflare or the static site's runtime configuration.
+
+## Production acceptance
+
+A launch is accepted only after all of these pass:
+
+1. Homepage
+2. Lead submission
+3. Booking
+4. Google Calendar synchronization
+5. Admin login
+6. Revenue Command Centre
+7. Quote workflow
+8. Job/inspection workflow
+9. Certificate generation and public verification
+10. Renewal workflow
+11. Unauthorized access rejection
+12. Health/automation verification
+
+## Rollback
+
+- Keep the previous container image/tag.
+- Keep a database backup before deployment.
+- If acceptance fails, restore the prior application image without replacing the SQLite volume.
+- Never delete or overwrite production `smartbiz.sqlite` as part of application deployment.
