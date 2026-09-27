@@ -1,41 +1,27 @@
-name: CI
+name: SmartBiz MVP CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
-  test:
+  test-and-build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11"]
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+          python-version: "3.11"
+
+      - name: Install application
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .
-          python -m pip install pytest httpx
-      - name: Run tests
-        run: PYTHONPATH='' python -m pytest tests/ -v
+          python -m pip install .
+          python -m pip install pytest
 
-  deploy-pages:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: smartbiz-mvp
-          directory: website
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run regression suite
+        run: python -m pytest -q
+
+      - name: Build production container
+        run: docker build -t smartbiz-mvp:test .
