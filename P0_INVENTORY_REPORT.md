@@ -20,7 +20,7 @@
 | Port | 18789 |
 | Bind | loopback |
 | Auth Mode | token |
-| Auth Token | `01546d8777de9422e47d9a50fccca94c3206683dcd5ed5c2` (masked: 01546d...d5c2) |
+| Auth Token | `[REDACTED]` (internal, not for VCS) |
 | Tools Profile | coding |
 | Heartbeat Agent | main |
 | System Agent | main |

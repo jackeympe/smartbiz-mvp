@@ -1,6 +1,9 @@
 __pycache__
 *.pyc
 smartbiz.sqlite
+*.sqlite.backup*
+*.zip
+SMARTBIZ_FIRE_CONTROL_PLANE_AUDIT_PACK.zip
 .venv
 dist
 build
