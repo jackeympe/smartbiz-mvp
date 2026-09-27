@@ -52,12 +52,7 @@ class SimpleTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
         # Allow CORS preflight
         if request.method == "OPTIONS":
-            return JSONResponse({}, status_code=204, headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization, x-smartbiz-token",
-                "Access-Control-Max-Age": "86400",
-            })
+            return JSONResponse({}, status_code=204, headers=_cors_headers(request))
         path = request.url.path
         # Admin-only paths
         if path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads", "/api/v1/export", "/api/v1/inspections")):
@@ -77,8 +72,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-        response.headers.setdefault("Access-Control-Allow-Origin", "*")
-        response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization, x-smartbiz-token")
+        cors = _cors_headers(request)
+        for key, value in cors.items():
+            response.headers.setdefault(key, value)
         return response
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
