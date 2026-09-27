@@ -30,10 +30,39 @@ from smartbiz.routes_v2 import get_v2_routes
 
 DB_PATH = os.environ.get("DB_PATH", "smartbiz.sqlite")
 lock = threading.Lock()
-ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")
 AGENTMAIL_INBOX_ID = os.environ.get("AGENTMAIL_INBOX_ID", "compliance1660@agentmail.to")
 AGENTMAIL_API_KEY = os.environ.get("AGENTMAIL_API_KEY", "")
 WHATSAPP_NUMBER = os.environ.get("WHATSAPP_NUMBER", "")
+
+APP_ENV = os.environ.get("SMARTBIZ_ENV", "development").strip().lower()
+ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev" if APP_ENV != "production" else "")
+TECHNICIAN_TOKEN = os.environ.get(
+    "SMARTBIZ_TECHNICIAN_TOKEN",
+    "tech-complete-1234" if APP_ENV != "production" else "",
+)
+_default_origins = (
+    "http://localhost:8000,http://127.0.0.1:8000"
+    if APP_ENV != "production"
+    else "https://smartbizfire.co.za,https://www.smartbizfire.co.za"
+)
+ALLOWED_ORIGINS = {
+    origin.strip()
+    for origin in os.environ.get("SMARTBIZ_ALLOWED_ORIGINS", _default_origins).split(",")
+    if origin.strip()
+}
+
+
+def _cors_headers(request: Request) -> dict[str, str]:
+    origin = request.headers.get("origin", "")
+    headers = {
+        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, x-smartbiz-token",
+        "Access-Control-Max-Age": "86400",
+    }
+    if origin and origin in ALLOWED_ORIGINS:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Vary"] = "Origin"
+    return headers
 
 QUIZ_QUESTIONS = [
   {"id": "q1", "text": "Do you have a current fire risk assessment on file?", "options": ["Yes", "No", "Not sure"]},
@@ -52,12 +81,7 @@ class SimpleTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Any, call_next: Any) -> JSONResponse:
         # Allow CORS preflight
         if request.method == "OPTIONS":
-            return JSONResponse({}, status_code=204, headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Authorization, x-smartbiz-token",
-                "Access-Control-Max-Age": "86400",
-            })
+            return JSONResponse({}, status_code=204, headers=_cors_headers(request))
         path = request.url.path
         # Admin-only paths
         if path.startswith(("/jobs", "/api/v1/documents", "/api/v1/status", "/leads", "/api/v1/export", "/api/v1/inspections")):
@@ -77,8 +101,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-        response.headers.setdefault("Access-Control-Allow-Origin", "*")
-        response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization, x-smartbiz-token")
+        cors = _cors_headers(request)
+        for key, value in cors.items():
+            response.headers.setdefault(key, value)
         return response
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

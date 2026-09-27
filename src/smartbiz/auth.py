@@ -10,8 +10,12 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 from smartbiz.db import get_connection, db_lock
 
-AUTH_SECRET = os.environ.get("AUTH_SECRET", "smartbiz-fire-secret-key-2026-south-africa")
-ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev")
+APP_ENV = os.environ.get("SMARTBIZ_ENV", "development").strip().lower()
+AUTH_SECRET = os.environ.get("AUTH_SECRET", "smartbiz-fire-dev-secret-change-me" if APP_ENV != "production" else "")
+ADMIN_TOKEN = os.environ.get("SMARTBIZ_ADMIN_TOKEN", "dev" if APP_ENV != "production" else "")
+
+if APP_ENV == "production" and not AUTH_SECRET:
+    raise RuntimeError("AUTH_SECRET is required when SMARTBIZ_ENV=production")
 
 # Role definitions
 ROLE_SUPER_ADMIN = "SUPER_ADMIN"
@@ -72,8 +76,12 @@ def seed_default_admin() -> None:
     with db_lock, get_connection() as con:
         count = con.execute("SELECT count(*) FROM users").fetchone()[0]
         if count == 0:
-            default_email = os.environ.get("DEFAULT_ADMIN_EMAIL", "admin@smartbizfire.co.za")
-            default_pass = os.environ.get("DEFAULT_ADMIN_PASSWORD", "SmartBizFire2026!")
+            default_email = os.environ.get("DEFAULT_ADMIN_EMAIL", "admin@smartbizfire.co.za" if APP_ENV != "production" else "")
+            default_pass = os.environ.get("DEFAULT_ADMIN_PASSWORD", "SmartBizFire2026!" if APP_ENV != "production" else "")
+            if not default_email or not default_pass:
+                raise RuntimeError(
+                    "DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD are required to seed the first production admin"
+                )
             pw_hash = hash_password(default_pass)
             now = datetime.now(timezone.utc).isoformat()
             con.execute(
@@ -81,6 +89,6 @@ def seed_default_admin() -> None:
                 INSERT INTO users (email, password_hash, full_name, role, phone, is_active, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, 1, ?, ?)
                 """,
-                (default_email, pw_hash, "SmartBiz Super Admin", ROLE_SUPER_ADMIN, "+27110000000", now, now)
+                (default_email, pw_hash, "SmartBiz Super Admin", ROLE_SUPER_ADMIN, os.environ.get("DEFAULT_ADMIN_PHONE", ""), now, now)
             )
             con.commit()
