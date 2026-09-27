@@ -1,5 +1,7 @@
 # SmartBiz Fire Safety MVP
 
+[![SmartBiz MVP CI/CD](https://github.com/jackeympe/smartbiz-mvp/actions/workflows/ci.yml/badge.svg)](https://github.com/jackeympe/smartbiz-mvp/actions/workflows/ci.yml)
+
 Local-first fire compliance platform: quiz lead funnel, bookings, PayFast payments, technician QR completion, PDF/COC docs, and admin dashboard.
 
 ## Stack
