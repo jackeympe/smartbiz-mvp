@@ -1,0 +1,74 @@
+# HERMES_AUTH_STATUS
+
+**Project:** SmartBiz Fire MVP  
+**Date:** 2026-09-20  
+**Status:** BLOCKED — AUTHENTICATION NOT PROVEN
+
+## Current finding
+
+The latest project inventory reported:
+
+```text
+Standalone Hermes runtime: RUNNING
+PID: 6840
+Nous access token: EXPIRED
+```
+
+Therefore:
+
+**HERMES_AUTH = BLOCKED**
+
+A running Hermes process is not sufficient evidence of successful authentication.
+
+## Required verification
+
+On the SmartBiz host:
+
+```bash
+ps aux | grep -i '[h]ermes'
+```
+
+Inspect the relevant service/process configuration without printing secrets.
+
+Then perform the runtime's supported authentication/health check.
+
+Do NOT paste tokens into Discord, GitHub, logs, reports, or this chat.
+
+## Required outcome
+
+One of:
+
+```text
+PASS
+```
+
+Meaning authenticated and able to execute a real delegated task.
+
+or:
+
+```text
+BLOCKED
+```
+
+Meaning human authentication/credential action is still required.
+
+or:
+
+```text
+FAIL
+```
+
+Meaning credentials exist but runtime authentication fails.
+
+## Evidence required for PASS
+
+1. Hermes process running.
+2. Authentication succeeds.
+3. Hermes accepts a real delegated task.
+4. Hermes produces an actual response.
+5. Trace ID can be correlated with the task.
+6. No secret is exposed.
+
+## Human action
+
+If the Nous credential requires interactive refresh/login, the Director/operator must perform that action on the SmartBiz host. Do not invent or fabricate credentials.

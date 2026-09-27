@@ -1,0 +1,122 @@
+# E2E_TRACE_REPORT
+
+**Project:** SmartBiz Fire MVP  
+**Date:** 2026-09-20  
+**Status:** NOT YET EXECUTED — DO NOT CLAIM PASS
+
+## Objective
+
+Prove a real message can travel:
+
+```text
+Discord
+→ Quin-Suchi
+→ Hermes
+→ Specialist
+→ Verifier
+→ Hermes
+→ Quin-Suchi
+→ Discord
+```
+
+## Required trace fields
+
+Every hop must preserve:
+
+- `trace_id`
+- `task_id`
+- originating channel
+- destination channel
+- agent ID
+- timestamp
+- status
+- actual response
+- verifier result
+
+## Test sequence
+
+### E2E-TEST-001 — Quin-Suchi → Hermes
+
+Command Quin-Suchi to delegate a real health-check task to Hermes.
+
+Expected:
+
+```text
+QUIN-SUCHI → HERMES = PASS
+```
+
+### E2E-TEST-002 — Hermes → Sales
+
+Using the same trace ID, Hermes delegates a real diagnostic task to Sales.
+
+Expected:
+
+```text
+HERMES → SALES = PASS
+```
+
+### E2E-TEST-003 — Sales → Verifier
+
+Verifier independently checks the Sales execution.
+
+Expected:
+
+```text
+SALES → VERIFIER = PASS
+```
+
+### E2E-TEST-004 — Verifier → Hermes
+
+Verifier returns its result to Hermes with the same trace ID.
+
+Expected:
+
+```text
+VERIFIER → HERMES = PASS
+```
+
+### E2E-TEST-005 — Hermes → Quin-Suchi
+
+Hermes returns the verified result to Quin-Suchi.
+
+Expected:
+
+```text
+HERMES → QUIN-SUCHI = PASS
+```
+
+### E2E-TEST-006 — Quin-Suchi → Discord
+
+Quin-Suchi posts the final result to the originating Discord control channel.
+
+Expected:
+
+```text
+QUIN-SUCHI → DISCORD = PASS
+```
+
+## Acceptance matrix
+
+| Hop | Result | Evidence |
+|---|---|---|
+| Discord → Quin-Suchi | NOT EXECUTED | — |
+| Quin-Suchi → Hermes | NOT EXECUTED | — |
+| Hermes → Specialist | NOT EXECUTED | — |
+| Specialist → Verifier | NOT EXECUTED | — |
+| Verifier → Hermes | NOT EXECUTED | — |
+| Hermes → Quin-Suchi | NOT EXECUTED | — |
+| Quin-Suchi → Discord | NOT EXECUTED | — |
+| Trace ID preserved | NOT EXECUTED | — |
+| Audit record created | NOT EXECUTED | — |
+
+## Overall result
+
+```text
+E2E RESULT = BLOCKED / NOT EXECUTED
+```
+
+This is intentional. No successful runtime evidence has been supplied for the complete path.
+
+## PASS criteria
+
+The overall test becomes PASS only when every hop has actual runtime evidence and the same trace ID can be correlated across the entire execution.
