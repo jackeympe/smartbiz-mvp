@@ -1,41 +1,62 @@
-name: CI
+name: SmartBiz MVP CI/CD
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smartbiz-production
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11"]
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .
           python -m pip install pytest httpx
+
       - name: Run tests
         run: PYTHONPATH='' python -m pytest tests/ -v
 
   deploy-pages:
     needs: test
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    environment: production
     steps:
       - uses: actions/checkout@v4
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+
+      - name: Deploy website to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: smartbiz-mvp
-          directory: website
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          command: pages deploy website --project-name=smartbiz-mvp --branch=main
+
+      - name: Verify production homepage
+        run: |
+          for i in {1..18}; do
+            if curl --fail --silent --show-error https://www.smartbizfire.co.za/ >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Verify sitemap
+        run: curl --fail --silent --show-error https://www.smartbizfire.co.za/sitemap.xml >/dev/null
