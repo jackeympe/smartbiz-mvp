@@ -117,7 +117,7 @@ def generate_quote_pdf(quote_id: int) -> bytes:
 
     # Header
     story.append(Paragraph("<b>SMARTBIZ FIRE SAFETY (PTY) LTD</b>", styles["Heading1"]))
-    story.append(Paragraph("Reg# 2025/515436/07 · SAQCC-Fire Reg. 22/064 · South Africa", styles["Normal"]))
+    story.append(Paragraph("Reg# 2025/515463/07 · SAQCC-Fire Reg. 22/064 · South Africa", styles["Normal"]))
     story.append(Paragraph("Email: compliance@smartbizfire.co.za · Phone: +27 11 000 0000", styles["Normal"]))
     story.append(Spacer(1, 16))
 
