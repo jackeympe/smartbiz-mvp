@@ -193,12 +193,42 @@ def create_confirmed_appointment(payload: Dict[str, Any]) -> Dict[str, Any]:
             """,
             (booking_reference, calendar_event_id, booking_id),
         )
+        job_cur = con.execute(
+            """
+            INSERT INTO jobs (
+              client, site, status, booking_id, service, contact_name,
+              email, phone, assigned_technician_id, scheduled_start,
+              scheduled_end, notes, created_at
+            ) VALUES (?, ?, 'scheduled', ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+            """,
+            (
+                company,
+                location,
+                booking_id,
+                service,
+                f"{first_name} {last_name}",
+                email,
+                phone,
+                start_iso,
+                end_iso,
+                notes or f"Automatically generated from appointment {booking_reference}",
+                now_iso,
+            ),
+        )
+        job_id = int(job_cur.lastrowid)
         con.execute(
             """
             INSERT INTO job_events (job_id, event_type, detail, created_at)
             VALUES (?, 'calendar_reserved', ?, ?)
             """,
             (booking_id, f"{start_iso} to {end_iso}; event_id={calendar_event_id}", now_iso),
+        )
+        con.execute(
+            """
+            INSERT INTO job_events (job_id, event_type, detail, created_at)
+            VALUES (?, 'job_card_created', ?, ?)
+            """,
+            (booking_id, f"job_id={job_id}; booking_reference={booking_reference}", now_iso),
         )
 
         # Operational reminders are queued now; a dispatcher can deliver them later.
@@ -279,6 +309,8 @@ def create_confirmed_appointment(payload: Dict[str, Any]) -> Dict[str, Any]:
         "booking_id": booking_id,
         "lead_id": lead_id,
         "booking_reference": booking_reference,
+        "job_id": job_id,
+        "job_card_reference": f"JC-{job_id:06d}",
         "status": final_status.upper(),
         "calendar_reserved": True,
         "calendar_event_id": calendar_event_id,

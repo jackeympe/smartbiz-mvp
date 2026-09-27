@@ -44,9 +44,38 @@ def init_all_tables() -> None:
               client TEXT NOT NULL,
               site TEXT NOT NULL,
               status TEXT NOT NULL DEFAULT 'draft',
+              booking_id INTEGER NOT NULL DEFAULT 0,
+              service TEXT NOT NULL DEFAULT '',
+              contact_name TEXT NOT NULL DEFAULT '',
+              email TEXT NOT NULL DEFAULT '',
+              phone TEXT NOT NULL DEFAULT '',
+              assigned_technician_id INTEGER NOT NULL DEFAULT 0,
+              scheduled_start TEXT NOT NULL DEFAULT '',
+              scheduled_end TEXT NOT NULL DEFAULT '',
+              notes TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL DEFAULT ''
             )
             """
+        )
+        for statement in (
+            "ALTER TABLE jobs ADD COLUMN booking_id INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE jobs ADD COLUMN service TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN contact_name TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN email TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN phone TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN assigned_technician_id INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE jobs ADD COLUMN scheduled_start TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN scheduled_end TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
+        ):
+            try:
+                con.execute(statement)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        con.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_booking_id "
+            "ON jobs(booking_id) WHERE booking_id != 0"
         )
         con.execute(
             """

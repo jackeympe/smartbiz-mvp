@@ -315,6 +315,28 @@ def test_public_appointment_booking_calendar_and_whatsapp_confirmation(monkeypat
     assert data["google_calendar_event_id"] == "google-test-event"
     assert data["whatsapp_sent"] is True
     assert data["booking_reference"].startswith("SB-APT-")
+    assert data["job_id"] > 0
+    assert data["job_card_reference"].startswith("JC-")
+
+    unauthorized_job_card = client.get(
+        f"/api/v1/bookings/{data['booking_id']}/job-card"
+    )
+    assert unauthorized_job_card.status_code == 401
+
+    job_card = client.get(
+        f"/api/v1/bookings/{data['booking_id']}/job-card",
+        headers={"x-smartbiz-token": "dev"},
+    )
+    assert job_card.status_code == 200
+    assert job_card.json()["job_card"]["id"] == data["job_id"]
+    assert job_card.json()["calendar_event"]["id"] == data["calendar_event_id"]
+
+    job_card_pdf = client.get(
+        f"/api/v1/bookings/{data['booking_id']}/job-card/pdf",
+        headers={"x-smartbiz-token": "dev"},
+    )
+    assert job_card_pdf.status_code == 200
+    assert base64.b64decode(job_card_pdf.json()["pdf_base64"]).startswith(b"%PDF")
 
     conflict = client.post("/api/v1/appointments", json={
         "first_name": "Second",
@@ -340,6 +362,14 @@ def test_public_appointment_booking_calendar_and_whatsapp_confirmation(monkeypat
         assert booking["calendar_event_id"] > 0
         assert booking["whatsapp_status"] == "SENT"
 
+        job = con.execute(
+            "SELECT * FROM jobs WHERE booking_id = ?",
+            (data["booking_id"],),
+        ).fetchone()
+        assert job["id"] == data["job_id"]
+        assert job["status"] == "scheduled"
+        assert job["scheduled_start"] == start_time
+
         reminders = con.execute(
             "SELECT template_key, status FROM notifications WHERE payload LIKE ? ORDER BY id",
             (f'%\"booking_id\": {data["booking_id"]}%',),
@@ -349,4 +379,3 @@ def test_public_appointment_booking_calendar_and_whatsapp_confirmation(monkeypat
             "APPOINTMENT_REMINDER_2H",
         ]
         assert all(row["status"] == "QUEUED" for row in reminders)
-
