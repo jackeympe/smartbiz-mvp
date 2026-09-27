@@ -25,3 +25,43 @@ jobs:
 
       - name: Build production container
         run: docker build -t smartbiz-mvp:test .
+
+  deploy-production:
+    needs: test-and-build
+    if: github.ref == 'refs/heads/feature/confirmed-appointment-booking' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trigger Render backend deploy when hook is configured
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+
+      - name: Verify backend health
+        run: |
+          for i in {1..24}; do
+            if curl --fail --silent --show-error https://smartbiz-mvp.onrender.com/health; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+      - name: Deploy Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy website --project-name=smartbiz-mvp --branch=main
+
+      - name: Verify public website
+        run: |
+          for i in {1..18}; do
+            if curl --fail --silent --show-error https://www.smartbizfire.co.za/ >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
