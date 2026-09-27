@@ -127,13 +127,16 @@ def test_full_acceptance_journey_steps_1_to_25():
         "findings_summary": "All 9kg DCP extinguishers inspected, weighed, and re-tagged.",
         "recommendations": "Maintain clear 1-metre perimeter around fire points.",
         "signature_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-    })
+    }, headers=admin_headers)
     assert complete_res.status_code == 200
     assert complete_res.json()["inspection"]["status"] == "COMPLETED"
     assert complete_res.json()["inspection"]["overall_score"] == 100
 
     # 18 & 19. Generate Service / Inspection Report PDF
-    insp_pdf_res = client.get(f"/api/v1/inspections/{insp_id}/pdf")
+    insp_pdf_res = client.get(
+        f"/api/v1/inspections/{insp_id}/pdf",
+        headers=admin_headers
+    )
     assert insp_pdf_res.status_code == 200
     assert len(base64.b64decode(insp_pdf_res.json()["pdf_base64"])) > 500
 

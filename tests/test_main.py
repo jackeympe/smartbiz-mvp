@@ -449,8 +449,20 @@ def test_smtp_test_endpoint_requires_admin_token():
         "/api/v1/smtp-test",
         headers={"x-smartbiz-token": "dev"},
     )
-    assert r.status_code == 200
-    assert r.json()["ok"] is True
+
+    smtp_configured = all(
+        os.environ.get(key)
+        for key in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS")
+    ) and (
+        os.environ.get("SMARTBIZ_EMAIL_TO")
+        or os.environ.get("SMARBIZ_EMAIL_TO")
+    )
+
+    if smtp_configured:
+        assert r.status_code == 200, r.text
+        assert r.json()["ok"] is True
+    else:
+        assert r.status_code == 400, r.text
 
 
 def test_accounting_provider_is_zoho():

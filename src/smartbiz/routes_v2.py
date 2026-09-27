@@ -1,3 +1,4 @@
+from smartbiz.services.revenue_service import get_revenue_dashboard
 """SmartBiz Fire V2 API Routes and Handlers for CRM, Operations, Equipment, Quotes, Certificates, Calendar, WhatsApp."""
 import base64
 import json
@@ -36,6 +37,7 @@ from smartbiz.services.renewal_service import (
     list_due_certificate_renewals,
 )
 from smartbiz.services.calendar_service import get_calendar_provider
+from smartbiz.services.appointment_service import check_availability, create_confirmed_appointment
 from smartbiz.services.whatsapp_service import (
     handle_incoming_message, send_whatsapp_message, verify_webhook_signature, WHATSAPP_VERIFY_TOKEN
 )
@@ -432,6 +434,31 @@ async def calendar_events_endpoint(request: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "event": event})
     return _err("Method not allowed", 405)
 
+# --- Public Appointment Booking Endpoints ---
+async def appointment_availability_endpoint(request: Request) -> JSONResponse:
+    start_time = (request.query_params.get("start_time") or "").strip()
+    try:
+        duration = int(request.query_params.get("duration_minutes") or 90)
+        result = check_availability(start_time, duration)
+    except (TypeError, ValueError) as exc:
+        return _err(str(exc), 422)
+    return JSONResponse({"ok": True, **result})
+
+
+async def appointments_endpoint(request: Request) -> JSONResponse:
+    try:
+        body = await request.json()
+    except Exception:
+        return _err("Invalid JSON body")
+    try:
+        result = create_confirmed_appointment(body)
+    except (TypeError, ValueError) as exc:
+        return _err(str(exc), 422)
+    if result.get("status") == "UNAVAILABLE":
+        return JSONResponse(result, status_code=409)
+    return JSONResponse(result, status_code=201)
+
+
 # --- Renewal & Reminders Endpoints ---
 async def renewal_scan_endpoint(request: Request) -> JSONResponse:
     res = scan_and_generate_renewal_reminders()
@@ -550,6 +577,32 @@ async def pricing_endpoint(request: Request) -> JSONResponse:
         })
 
 
+
+async def revenue_dashboard_endpoint(request: Request):
+    """Authenticated CEO revenue command-centre endpoint."""
+    auth_header = request.headers.get("Authorization") or ""
+    token = auth_header.replace("Bearer ", "").strip()
+    session = verify_session_token(token)
+
+    if not session:
+        return _err("Unauthorized session", 401)
+
+    if session.get("role") not in (
+        ROLE_SUPER_ADMIN,
+        ROLE_ADMIN,
+        ROLE_MANAGER,
+    ):
+        return _err("Forbidden", 403)
+
+    try:
+        return JSONResponse(get_revenue_dashboard())
+    except Exception as exc:
+        return JSONResponse(
+            {"error": "revenue_dashboard_failed", "detail": str(exc)},
+            status_code=500,
+        )
+
+
 def get_v2_routes() -> list[Route]:
     """Returns all V2 routes to mount in the application."""
     return [
@@ -585,6 +638,13 @@ def get_v2_routes() -> list[Route]:
             methods=["GET"],
         ),
         Route("/api/v1/certificates/verify/{certificate_number}", certificate_verify_endpoint, methods=["GET"]),
+        Route(
+            "/api/v1/admin/revenue-dashboard",
+            revenue_dashboard_endpoint,
+            methods=["GET"],
+        ),
+        Route("/api/v1/appointments/availability", appointment_availability_endpoint, methods=["GET"]),
+        Route("/api/v1/appointments", appointments_endpoint, methods=["POST"]),
         Route("/api/v1/calendar/events", calendar_events_endpoint, methods=["GET", "POST"]),
         Route("/api/v1/renewal/scan", renewal_scan_endpoint, methods=["POST"]),
         Route("/api/v1/webhooks/whatsapp", whatsapp_webhook_endpoint, methods=["GET", "POST"]),

@@ -49,7 +49,12 @@ def issue_certificate(
             ).fetchone()
 
             if existing:
-                return get_certificate(existing[0])
+                existing_id = existing[0]
+            else:
+                existing_id = None
+
+        if existing_id is not None:
+            return get_certificate(existing_id)
 
     cert_num = generate_certificate_number()
 
