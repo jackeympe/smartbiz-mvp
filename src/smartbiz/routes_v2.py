@@ -1,5 +1,6 @@
-from smartbiz.services.revenue_service import get_revenue_dashboard
 """SmartBiz Fire V2 API Routes and Handlers for CRM, Operations, Equipment, Quotes, Certificates, Calendar, WhatsApp."""
+
+from smartbiz.services.revenue_service import get_revenue_dashboard
 import base64
 import json
 import os
@@ -596,9 +597,9 @@ async def revenue_dashboard_endpoint(request: Request):
 
     try:
         return JSONResponse(get_revenue_dashboard())
-    except Exception as exc:
+    except Exception:
         return JSONResponse(
-            {"error": "revenue_dashboard_failed", "detail": str(exc)},
+            {"error": "revenue_dashboard_failed"},
             status_code=500,
         )
 
