@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional, Tuple
 from uvicorn import run
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -153,9 +153,38 @@ def init_db() -> None:
               client TEXT NOT NULL,
               site TEXT NOT NULL,
               status TEXT NOT NULL DEFAULT 'draft',
+              booking_id INTEGER NOT NULL DEFAULT 0,
+              service TEXT NOT NULL DEFAULT '',
+              contact_name TEXT NOT NULL DEFAULT '',
+              email TEXT NOT NULL DEFAULT '',
+              phone TEXT NOT NULL DEFAULT '',
+              assigned_technician_id INTEGER NOT NULL DEFAULT 0,
+              scheduled_start TEXT NOT NULL DEFAULT '',
+              scheduled_end TEXT NOT NULL DEFAULT '',
+              notes TEXT NOT NULL DEFAULT '',
               created_at TEXT NOT NULL DEFAULT ''
             )
             """
+        )
+        for statement in (
+            "ALTER TABLE jobs ADD COLUMN booking_id INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE jobs ADD COLUMN service TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN contact_name TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN email TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN phone TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN assigned_technician_id INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE jobs ADD COLUMN scheduled_start TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN scheduled_end TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE jobs ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
+        ):
+            try:
+                con.execute(statement)
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        con.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_booking_id "
+            "ON jobs(booking_id) WHERE booking_id != 0"
         )
         con.execute(
             """
@@ -1533,6 +1562,118 @@ async def smtp_test_endpoint(request: Request) -> JSONResponse:
     except Exception as e:
         return JSONResponse({"detail": str(e)}, status_code=500)
 
+
+def _get_booking_job_card(booking_id: int) -> Tuple[Optional[dict], Optional[dict], Optional[dict]]:
+    with lock, sqlite3.connect(DB_PATH) as con:
+        con.row_factory = sqlite3.Row
+        booking_row = con.execute("SELECT * FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        if not booking_row:
+            return None, None, None
+        booking = dict(booking_row)
+        job_row = con.execute(
+            "SELECT * FROM jobs WHERE booking_id=? ORDER BY id DESC LIMIT 1",
+            (booking_id,),
+        ).fetchone()
+        event_row = con.execute(
+            """
+            SELECT id, title, start_time, end_time, timezone, provider,
+                   external_event_id, external_event_url
+            FROM calendar_events WHERE id=?
+            """,
+            (int(booking.get("calendar_event_id") or 0),),
+        ).fetchone()
+        return booking, dict(job_row) if job_row else None, dict(event_row) if event_row else None
+
+
+async def get_booking_job_card(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    booking_id = int(request.path_params["booking_id"])
+    booking, job, calendar_event = _get_booking_job_card(booking_id)
+    if not booking:
+        return _json_error("booking not found", 404)
+    if not job:
+        return _json_error("job card not generated for booking", 404)
+    return JSONResponse({
+        "booking_id": booking_id,
+        "booking_reference": booking.get("booking_reference", ""),
+        "job_card_reference": f"JC-{job['id']:06d}",
+        "job_card": job,
+        "calendar_event": calendar_event,
+    })
+
+
+async def booking_job_card_pdf(request: Request) -> JSONResponse:
+    if request.headers.get("x-smartbiz-token") != ADMIN_TOKEN:
+        return JSONResponse({"detail": "missing or invalid admin token"}, status_code=401)
+    booking_id = int(request.path_params["booking_id"])
+    booking, job, calendar_event = _get_booking_job_card(booking_id)
+    if not booking:
+        return _json_error("booking not found", 404)
+    if not job:
+        return _json_error("job card not generated for booking", 404)
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+    except Exception as exc:
+        return _json_error("pdf generation unavailable: " + str(exc), 500)
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4, leftMargin=18 * mm, rightMargin=18 * mm,
+        topMargin=18 * mm, bottomMargin=18 * mm,
+    )
+    styles = getSampleStyleSheet()
+    details = [
+        ["Job Card", f"JC-{job['id']:06d}"],
+        ["Booking", booking.get("booking_reference") or str(booking_id)],
+        ["Client", job.get("client", "")],
+        ["Contact", job.get("contact_name", "")],
+        ["Email", job.get("email", "")],
+        ["Phone", job.get("phone", "")],
+        ["Site", job.get("site", "")],
+        ["Service", job.get("service", "")],
+        ["Scheduled start", job.get("scheduled_start", "")],
+        ["Scheduled end", job.get("scheduled_end", "")],
+        ["Technician ID", str(job.get("assigned_technician_id", 0))],
+        ["Status", job.get("status", "")],
+        ["Calendar", calendar_event.get("provider", "") if calendar_event else "Not linked"],
+    ]
+    story = [Paragraph("SmartBiz Fire Safety — Job Card", styles["Title"]), Spacer(1, 10)]
+    table = Table(details, colWidths=[45 * mm, 120 * mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#111827")),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.whitesmoke),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#f9fafb")),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.extend([
+        table,
+        Spacer(1, 18),
+        Paragraph("Work performed / findings", styles["Heading2"]),
+        Spacer(1, 45),
+        Paragraph("Technician signature: ______________________________", styles["Normal"]),
+        Spacer(1, 20),
+        Paragraph("Customer signature: _______________________________", styles["Normal"]),
+    ])
+    doc.build(story)
+    pdf = buf.getvalue()
+    return JSONResponse({
+        "booking_id": booking_id,
+        "job_id": job["id"],
+        "job_card_reference": f"JC-{job['id']:06d}",
+        "pdf_base64": base64.b64encode(pdf).decode("ascii"),
+        "filename": f"job-card-{job['id']}-booking-{booking_id}.pdf",
+    })
+
 async def pdf_booking_document(request: Request) -> JSONResponse:
     booking_id = int(request.path_params["booking_id"])
     with lock, sqlite3.connect(DB_PATH) as con:
@@ -1747,6 +1888,8 @@ app = Starlette(
         Route("/api/v1/bookings/{booking_id}/assign", assign_technician, methods=["POST"]),
         Route("/api/v1/bookings/{booking_id}/inspection", create_booking_inspection, methods=["POST"]),
         Route("/api/v1/bookings/{booking_id}/history", booking_history, methods=["GET"]),
+        Route("/api/v1/bookings/{booking_id}/job-card", get_booking_job_card, methods=["GET"]),
+        Route("/api/v1/bookings/{booking_id}/job-card/pdf", booking_job_card_pdf, methods=["GET"]),
         Route("/api/v1/export/all", export_all, methods=["GET"]),
         Route("/payfast/notify", payfast_notify, methods=["POST"]),
         Route("/api/v1/analytics/summary", analytics_summary, methods=["GET"]),
