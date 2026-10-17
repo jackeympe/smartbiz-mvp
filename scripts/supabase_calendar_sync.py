@@ -50,14 +50,16 @@ def eligible(row, now):
 def run():
     endpoint = os.environ["SUPABASE_URL"].rstrip("/")
     secret = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    client_id = os.environ["GOOGLE_CLIENT_ID"]
-    client_secret = os.environ["GOOGLE_CLIENT_SECRET"]
-    refresh = os.environ["GOOGLE_REFRESH_TOKEN"]
+    client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+    refresh = os.environ.get("GOOGLE_REFRESH_TOKEN", "")
     calendar = urllib.parse.quote(os.environ.get("GOOGLE_CALENDAR_ID", "primary"), safe="")
     dry_run = os.environ.get("CALENDAR_SYNC_APPLY", "false").lower() != "true"
     db_headers = {"apikey": secret, "Authorization": "Bearer " + secret, "Content-Type": "application/json"}
     base = endpoint + "/rest/v1/"
-    queue = request(base + "calendar_sync_queue?select=id,booking_id,action,processed_at&processed_at=is.null&action=eq.create&order=created_at.asc&limit=25", headers=db_headers)
+    if not dry_run and not (client_id and client_secret and refresh):
+        raise RuntimeError("Google OAuth is not configured")
+    queue = request(base + "calendar_sync_queue?select=id,booking_id,action,processed_at&processed_at=is.null&action=eq.create&order=created_at.asc&limit=1000", headers=db_headers)
     if not queue:
         print("No pending queue items")
         return
